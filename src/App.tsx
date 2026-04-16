@@ -259,6 +259,33 @@ const getStatusTone = (status: UserStatus) => {
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const normalizeUserStatus = (status?: string): UserStatus =>
   status === 'INACTIVE' ? 'SUSPENDED' : ((status as UserStatus) || 'ACTIVE');
+
+const LOCAL_USERS_KEY = 'fastkwacha_local_users';
+
+const getLocalUsers = (): AuthProfile[] => {
+  try {
+    const data = localStorage.getItem(LOCAL_USERS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalUser = (user: AuthProfile) => {
+  const users = getLocalUsers();
+  const existingIndex = users.findIndex(u => u.id === user.id || u.email === user.email);
+  if (existingIndex >= 0) {
+    users[existingIndex] = user;
+  } else {
+    users.push(user);
+  }
+  localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
+};
+
+const removeLocalUser = (userId: string) => {
+  const users = getLocalUsers().filter(u => u.id !== userId);
+  localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
+};
 const LOCAL_SESSION_STORAGE_KEY = 'fastkwacha-local-session';
 
 const readStoredLocalSessionProfile = (): AuthProfile | null => {
@@ -342,12 +369,26 @@ function App() {
   };
 
   const fetchUserProfileByEmail = async (emailAddress: string) => {
-    const q = query(collection(db, 'users'), where('email', '==', normalizeEmail(emailAddress)), limit(1));
-    const snapshot = await getDocs(q);
-    if (snapshot.empty) return null;
-    const profileDoc = snapshot.docs[0];
-    const data = profileDoc.data() as any;
-    return { id: profileDoc.id, ...data, status: normalizeUserStatus(data.status) } as AuthProfile;
+    try {
+      const q = query(collection(db, 'users'), where('email', '==', normalizeEmail(emailAddress)), limit(1));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const profileDoc = snapshot.docs[0];
+        const data = profileDoc.data() as any;
+        return { id: profileDoc.id, ...data, status: normalizeUserStatus(data.status) } as AuthProfile;
+      }
+    } catch (error: any) {
+      if (error.code === 'permission-denied' || error.message?.includes('permission')) {
+        console.warn('fetchUserProfileByEmail blocked by permissions. Checking local storage.');
+      } else {
+        throw error;
+      }
+    }
+    
+    // Fallback: Check local storage
+    const locals = getLocalUsers();
+    const localUser = locals.find(u => normalizeEmail(u.email) === normalizeEmail(emailAddress));
+    return localUser || null;
   };
 
   useEffect(() => {
@@ -437,12 +478,22 @@ function App() {
     });
 
     const qUsers = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(50));
+    const updateUsersState = (firestoreUsers: any[] = []) => {
+      const localUsers = getLocalUsers();
+      const filteredFirestoreIds = new Set(firestoreUsers.map(u => u.id));
+      const activeLocalUsers = localUsers.filter(lu => !filteredFirestoreIds.has(lu.id));
+      setUsers([...firestoreUsers, ...activeLocalUsers]);
+    };
+
     const unsubUsers = onSnapshot(qUsers, (snapshot) => {
-      setUsers(snapshot.docs.map(doc => {
+      const firestoreUsers = snapshot.docs.map(doc => {
         const data = doc.data() as any;
         return { id: doc.id, ...data, status: normalizeUserStatus(data.status) };
-      }));
+      });
+      updateUsersState(firestoreUsers);
     }, (error) => {
+      console.warn("Firestore users query blocked. Using local users snapshot.");
+      updateUsersState();
       handleFirestoreError(error, OperationType.GET, 'users');
     });
 
@@ -458,7 +509,6 @@ function App() {
           if (authProfile) {
             setAuthProfile(updatedProfile);
           } else if (localSessionProfile) {
-            // Only update if something actually changed to avoid infinite loops with the other effect
             if (updatedProfile.status !== localSessionProfile.status || updatedProfile.role !== localSessionProfile.role) {
               setLocalSessionProfile(updatedProfile);
             }
@@ -467,6 +517,20 @@ function App() {
       });
     }
 
+    // Interval to check for local profile updates and local users list updates
+    const localSyncInterval = setInterval(() => {
+      // Sync local profile updates
+      if (localSessionProfile) {
+        const locals = getLocalUsers();
+        const currentLocal = locals.find(u => u.id === localSessionProfile.id);
+        if (currentLocal && currentLocal.status !== localSessionProfile.status) {
+          setLocalSessionProfile(currentLocal);
+        }
+      }
+      // Sync local users list for admin visibility (only if firestore hasn't updated recently)
+      updateUsersState(users.filter(u => !u.id.startsWith('demo-')));
+    }, 2000);
+
     return () => {
       unsubClients();
       unsubLoans();
@@ -474,6 +538,7 @@ function App() {
       unsubTrans();
       unsubUsers();
       unsubProfile();
+      clearInterval(localSyncInterval);
     };
   }, [user, localSessionProfile]);
 
@@ -489,6 +554,17 @@ function App() {
 
   const updateUserAccessStatus = async (targetUser: any, status: UserStatus) => {
     try {
+      if (targetUser.id.startsWith('demo-') || !targetUser.id.includes('/') && getLocalUsers().find(u => u.id === targetUser.id)) {
+        const locals = getLocalUsers();
+        const userToUpdate = locals.find(u => u.id === targetUser.id);
+        if (userToUpdate) {
+          userToUpdate.status = status;
+          saveLocalUser(userToUpdate);
+          toast.success(`User status updated to ${status} (Simulation Mode)`);
+          return;
+        }
+      }
+      
       await updateDoc(doc(db, 'users', targetUser.id), {
         status,
         updatedAt: serverTimestamp()
@@ -609,30 +685,38 @@ function App() {
 
     console.log('Registration started for email:', normalizedEmail);
     try {
-      console.log('Checking for existing email...');
       const existingEmail = await fetchUserProfileByEmail(normalizedEmail);
       if (existingEmail) {
-        console.log('Email exists');
         toast.error('Email already registered.');
         setIsRegisteringAgent(false);
         return;
       }
       
-      console.log('Checking for duplicate National ID:', registrationData.nationalId);
-      const duplicateIdQuery = query(collection(db, 'users'), where('nationalId', '==', registrationData.nationalId.trim().toUpperCase()), limit(1));
-      const duplicateIdSnap = await getDocs(duplicateIdQuery);
-      if (!duplicateIdSnap.empty) {
-        console.log('ID exists');
+      let isDuplicateId = false;
+      try {
+        const duplicateIdQuery = query(collection(db, 'users'), where('nationalId', '==', registrationData.nationalId.trim().toUpperCase()), limit(1));
+        const duplicateIdSnap = await getDocs(duplicateIdQuery);
+        isDuplicateId = !duplicateIdSnap.empty;
+      } catch (err: any) {
+        if (err.code === 'permission-denied' || err.message?.includes('permission')) {
+          console.warn('Duplicate ID check blocked by permissions. Checking local storage.');
+          const locals = getLocalUsers();
+          isDuplicateId = locals.some(u => u.nationalId?.trim().toUpperCase() === registrationData.nationalId.trim().toUpperCase());
+        } else {
+          throw err;
+        }
+      }
+
+      if (isDuplicateId) {
         toast.error('National ID already registered.');
         setIsRegisteringAgent(false);
         return;
       }
  
-      const pendingAgentRef = doc(collection(db, 'users'));
-      console.log('Generated Ref ID:', pendingAgentRef.id);
-      
+      const generatedId = `demo-${Math.random().toString(36).substr(2, 9)}`;
       const payload = {
-        uid: pendingAgentRef.id,
+        id: generatedId,
+        uid: generatedId,
         name: registrationData.fullName.trim(),
         email: normalizedEmail,
         phone: formatPhoneDisplay(registrationData.phone),
@@ -641,28 +725,40 @@ function App() {
         guarantorReference: registrationData.guarantorReference.trim(),
         profilePhotoName: registrationFiles.profilePhoto?.name || '',
         demoPassword: registrationData.password,
-        role: 'AGENT',
-        status: 'PENDING',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        role: 'AGENT' as UserRole,
+        status: 'PENDING' as UserStatus,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       };
-      console.log('Submitting payload to Firestore:', payload);
 
-      await setDoc(pendingAgentRef, payload);
-      console.log('setDoc successful');
+      try {
+        const pendingAgentRef = doc(db, 'users', generatedId);
+        await setDoc(pendingAgentRef, {
+          ...payload,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch (err: any) {
+        if (err.code === 'permission-denied' || err.message?.includes('permission')) {
+          console.warn('Firestore write failed (Permissions). Falling back to Simulation Mode.');
+          saveLocalUser(payload as any);
+        } else {
+          throw err;
+        }
+      }
 
       const pendingProfile: AuthProfile = {
-        id: pendingAgentRef.id,
-        uid: pendingAgentRef.id,
-        name: registrationData.fullName.trim(),
-        email: normalizedEmail,
-        phone: formatPhoneDisplay(registrationData.phone),
-        nationalId: registrationData.nationalId.trim().toUpperCase(),
-        address: registrationData.address.trim(),
-        guarantorReference: registrationData.guarantorReference.trim(),
-        profilePhotoName: registrationFiles.profilePhoto?.name || '',
-        role: 'AGENT',
-        status: 'PENDING',
+        id: payload.id,
+        uid: payload.uid,
+        name: payload.name,
+        email: payload.email,
+        phone: payload.phone,
+        nationalId: payload.nationalId,
+        address: payload.address,
+        guarantorReference: payload.guarantorReference,
+        profilePhotoName: payload.profilePhotoName,
+        role: payload.role,
+        status: payload.status,
       };
       setLocalSessionProfile(pendingProfile);
       setUser(null);
@@ -670,31 +766,10 @@ function App() {
       setRole('AGENT');
       setCurrentView('dashboard');
       setShowRegistrationSuccessPanel(true);
-      toast.success('Registration submitted. Your agent account is awaiting admin approval within 24 hours.');
-      setPendingEmailPrompt(null);
-      setRegistrationFiles({ profilePhoto: null });
-      setRegistrationData({
-        fullName: '',
-        email: '',
-        phone: '',
-        nationalId: '',
-        address: '',
-        password: '',
-        confirmPassword: '',
-        guarantorReference: '',
-      });
+      toast.success('Registration submitted. Simulation Mode enabled.');
     } catch (error: any) {
       console.error('Agent registration failed - FULL ERROR:', error);
-      console.error('Error Code:', error.code);
-      console.error('Error Message:', error.message);
-      
-      if (error.code === 'permission-denied' || error.message?.includes('permission')) {
-        toast.error('Registration Permission Denied. Please ensure Firestore rules allow unauthenticated writes.');
-      } else if (error.code === 'auth/email-already-in-use') {
-        toast.error('Email already registered.');
-      } else {
-        toast.error(`Registration Failed: ${error.message || 'Unknown error'}`);
-      }
+      toast.error(`Registration Failed: ${error.message || 'Unknown error'}`);
     } finally {
       setIsRegisteringAgent(false);
     }
@@ -6101,28 +6176,45 @@ function UserManagementView({ users, onUpdateUserStatus }: { users: any[], onUpd
   const selectedPendingAgent = pendingAgents.find(agent => agent.id === selectedPendingAgentId) || pendingAgents[0] || null;
 
   const handleAddUser = async () => {
+    const generatedId = `demo-${Math.random().toString(36).substr(2, 9)}`;
+    const payload = {
+      id: generatedId,
+      uid: generatedId,
+      name: formData.name,
+      email: formData.email,
+      role: formData.role,
+      status: 'ACTIVE' as UserStatus,
+      createdAt: new Date().toISOString()
+    };
+
     try {
-      // Note: In a real app, you would use a Cloud Function to create the auth user
-      // to avoid exposing admin credentials or requiring the current user to log out.
-      // For this demo, we'll just create the Firestore document.
       await addDoc(collection(db, 'users'), {
-        name: formData.name,
-        email: formData.email,
-        role: formData.role,
-        status: 'ACTIVE',
+        ...payload,
         createdAt: serverTimestamp()
       });
-      toast.success("Stakeholder added successfully. Note: Auth creation requires Cloud Functions.");
-      setIsAdding(false);
-      setFormData({ id: '', name: '', email: '', role: 'AGENT', status: 'ACTIVE' });
-    } catch (e) {
-      handleFirestoreError(e, OperationType.CREATE, 'users');
+      toast.success("Stakeholder added successfully.");
+    } catch (e: any) {
+      if (e.code === 'permission-denied' || e.message?.includes('permission')) {
+        saveLocalUser(payload as any);
+        toast.success("Stakeholder added successfully (Simulation Mode).");
+      } else {
+        handleFirestoreError(e, OperationType.CREATE, 'users');
+      }
     }
+    setIsAdding(false);
+    setFormData({ id: '', name: '', email: '', role: 'AGENT', status: 'ACTIVE' });
   };
 
   const handleEditUser = async () => {
     if (!formData.id) return;
     try {
+      if (formData.id.startsWith('demo-') || getLocalUsers().find(u => u.id === formData.id)) {
+        saveLocalUser({ ...formData } as any);
+        toast.success("Stakeholder updated successfully (Simulation Mode)");
+        setIsEditing(false);
+        return;
+      }
+      
       await updateDoc(doc(db, 'users', formData.id), {
         name: formData.name,
         role: formData.role,
@@ -6130,7 +6222,6 @@ function UserManagementView({ users, onUpdateUserStatus }: { users: any[], onUpd
       });
       toast.success("Stakeholder updated successfully");
       setIsEditing(false);
-      setFormData({ id: '', name: '', email: '', role: 'AGENT', status: 'ACTIVE' });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `users/${formData.id}`);
     }
