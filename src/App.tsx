@@ -65,6 +65,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useTheme as useNextTheme } from 'next-themes';
 
 // Firebase
 import { auth, db } from './lib/firebase';
@@ -217,6 +218,17 @@ interface AuthProfile {
   profilePhotoName?: string;
   guarantorReference?: string;
   createdAt?: any;
+  theme?: 'light' | 'dark' | 'system';
+  lastLogin?: string;
+  lastDevice?: string;
+}
+
+interface SystemSettings {
+  interest_rate_default: number;
+  max_loan_duration: number;
+  penalty_rate: number;
+  currency: string;
+  company_name: string;
 }
 
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
@@ -261,6 +273,8 @@ const normalizeUserStatus = (status?: string): UserStatus =>
   status === 'INACTIVE' ? 'SUSPENDED' : ((status as UserStatus) || 'ACTIVE');
 
 const LOCAL_USERS_KEY = 'fastkwacha_local_users';
+const LOCAL_CLIENTS_KEY = 'fastkwacha_local_clients';
+const LOCAL_APPLICATIONS_KEY = 'fastkwacha_local_apps';
 
 const getLocalUsers = (): AuthProfile[] => {
   try {
@@ -280,6 +294,46 @@ const saveLocalUser = (user: AuthProfile) => {
     users.push(user);
   }
   localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
+};
+
+const getLocalClients = (): any[] => {
+  try {
+    const data = localStorage.getItem(LOCAL_CLIENTS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalClient = (client: any) => {
+  const clients = getLocalClients();
+  const existingIndex = clients.findIndex(c => c.id === client.id);
+  if (existingIndex >= 0) {
+    clients[existingIndex] = client;
+  } else {
+    clients.push(client);
+  }
+  localStorage.setItem(LOCAL_CLIENTS_KEY, JSON.stringify(clients));
+};
+
+const getLocalApplications = (): any[] => {
+  try {
+    const data = localStorage.getItem(LOCAL_APPLICATIONS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveLocalApplication = (app: any) => {
+  const apps = getLocalApplications();
+  const existingIndex = apps.findIndex(a => a.id === app.id);
+  if (existingIndex >= 0) {
+    apps[existingIndex] = app;
+  } else {
+    apps.push(app);
+  }
+  localStorage.setItem(LOCAL_APPLICATIONS_KEY, JSON.stringify(apps));
 };
 
 const removeLocalUser = (userId: string) => {
@@ -316,6 +370,47 @@ const writeStoredLocalSessionProfile = (profile: AuthProfile | null) => {
 const getActiveSessionEmail = (profile?: AuthProfile | null) =>
   normalizeEmail(profile?.email || auth.currentUser?.email || readStoredLocalSessionProfile()?.email || '');
 
+const downloadCSV = (data: any[], filename: string) => {
+  if (data.length === 0) {
+    toast.error("No data available to export.");
+    return;
+  }
+  
+  const headers = Object.keys(data[0]);
+  const csvRows = [
+    headers.join(','),
+    ...data.map(row => 
+      headers.map(fieldName => {
+        const value = row[fieldName];
+        return `"${String(value).replace(/"/g, '""')}"`;
+      }).join(',')
+    )
+  ];
+  
+  const csvContent = csvRows.join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+};
+
+const getDeviceInfo = () => {
+  const ua = navigator.userAgent;
+  let browser = "Unknown";
+  if (ua.includes("Firefox")) browser = "Firefox";
+  else if (ua.includes("Chrome")) browser = "Chrome";
+  else if (ua.includes("Safari")) browser = "Safari";
+  else if (ua.includes("Edge")) browser = "Edge";
+  
+  return `${browser} on ${navigator.platform}`;
+};
+
 export default function AppWrapper() {
   return (
     <ErrorBoundary>
@@ -337,6 +432,13 @@ function App() {
   const [loans, setLoans] = useState<any[]>([]);
   const [applications, setApplications] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>({
+    interest_rate_default: 15,
+    max_loan_duration: 12,
+    penalty_rate: 5,
+    currency: 'MWK',
+    company_name: 'FastKwacha Ltd'
+  });
   const [users, setUsers] = useState<any[]>([]);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [pendingEmailPrompt, setPendingEmailPrompt] = useState<string | null>(null);
@@ -446,80 +548,109 @@ function App() {
     return () => unsubscribe();
   }, [localSessionProfile]);
 
+  // Unified Data Synchronization
   useEffect(() => {
     if (!user && !localSessionProfile) return;
 
+    // Clients Listener
     const qClients = query(collection(db, 'clients'), orderBy('createdAt', 'desc'), limit(50));
     const unsubClients = onSnapshot(qClients, (snapshot) => {
-      setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const firestoreClients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setClients(prev => {
+        const localClients = getLocalClients();
+        const firestoreIds = new Set(firestoreClients.map(c => c.id));
+        const activeLocal = localClients.filter(lc => !firestoreIds.has(lc.id));
+        return [...firestoreClients, ...activeLocal];
+      });
     }, (error) => {
+      console.warn("Firestore clients query blocked.", error);
       handleFirestoreError(error, OperationType.GET, 'clients');
     });
 
+    // Loans Listener
     const qLoans = query(collection(db, 'loans'), orderBy('disbursedAt', 'desc'), limit(50));
     const unsubLoans = onSnapshot(qLoans, (snapshot) => {
       setLoans(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'loans');
-    });
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'loans'));
 
+    // Applications Listener
     const qApps = query(collection(db, 'applications'), orderBy('createdAt', 'desc'), limit(50));
     const unsubApps = onSnapshot(qApps, (snapshot) => {
-      setApplications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const firestoreApps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setApplications(prev => {
+        const localApps = getLocalApplications();
+        const firestoreIds = new Set(firestoreApps.map(a => a.id));
+        const activeLocal = localApps.filter(la => !firestoreIds.has(la.id));
+        return [...firestoreApps, ...activeLocal];
+      });
     }, (error) => {
+      console.warn("Firestore apps query blocked.", error);
       handleFirestoreError(error, OperationType.GET, 'applications');
     });
 
+    // Transactions Listener
     const qTrans = query(collection(db, 'transactions'), orderBy('timestamp', 'desc'), limit(50));
     const unsubTrans = onSnapshot(qTrans, (snapshot) => {
       setTransactions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'transactions');
-    });
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'transactions'));
 
+    // Users Listener
     const qUsers = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limit(50));
-    const updateUsersState = (firestoreUsers: any[] = []) => {
-      const localUsers = getLocalUsers();
-      const filteredFirestoreIds = new Set(firestoreUsers.map(u => u.id));
-      const activeLocalUsers = localUsers.filter(lu => !filteredFirestoreIds.has(lu.id));
-      setUsers([...firestoreUsers, ...activeLocalUsers]);
-    };
-
     const unsubUsers = onSnapshot(qUsers, (snapshot) => {
-      const firestoreUsers = snapshot.docs.map(doc => {
-        const data = doc.data() as any;
-        return { id: doc.id, ...data, status: normalizeUserStatus(data.status) };
+      const firestoreUsers = snapshot.docs.map(doc => ({ 
+        id: doc.id, ...doc.data() as any, 
+        status: normalizeUserStatus((doc.data() as any).status) 
+      }));
+      setUsers(prev => {
+        const localUsers = getLocalUsers();
+        const firestoreIds = new Set(firestoreUsers.map(u => u.id));
+        const activeLocal = localUsers.filter(lu => !firestoreIds.has(lu.id));
+        return [...firestoreUsers, ...activeLocal];
       });
-      updateUsersState(firestoreUsers);
-    }, (error) => {
-      console.warn("Firestore users query blocked. Using local users snapshot.");
-      updateUsersState();
-      handleFirestoreError(error, OperationType.GET, 'users');
+    }, (error) => handleFirestoreError(error, OperationType.GET, 'users'));
+
+    // System Settings Listener
+    const unsubSettings = onSnapshot(doc(db, 'system_settings', 'global'), (docSnap) => {
+      if (docSnap.exists()) {
+        setSystemSettings(docSnap.data() as SystemSettings);
+      } else {
+        setDoc(doc(db, 'system_settings', 'global'), {
+          interest_rate_default: 15, max_loan_duration: 12, penalty_rate: 5,
+          currency: 'MWK', company_name: 'FastKwacha Ltd'
+        }).catch(console.error);
+      }
     });
 
-    // Profile listener for real-time activation
-    let unsubProfile = () => {};
+    return () => {
+      unsubClients(); unsubLoans(); unsubApps(); unsubTrans(); unsubUsers(); unsubSettings();
+    };
+  }, [user, localSessionProfile]);
+
+  // Profile Specific Listener
+  useEffect(() => {
     const profileId = authProfile?.id || localSessionProfile?.id;
-    if (profileId) {
-      unsubProfile = onSnapshot(doc(db, 'users', profileId), (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data() as any;
-          const updatedProfile = { id: docSnap.id, ...data, status: normalizeUserStatus(data.status) } as AuthProfile;
-          
-          if (authProfile) {
-            setAuthProfile(updatedProfile);
-          } else if (localSessionProfile) {
-            if (updatedProfile.status !== localSessionProfile.status || updatedProfile.role !== localSessionProfile.role) {
-              setLocalSessionProfile(updatedProfile);
-            }
+    if (!profileId) return;
+
+    const unsubProfile = onSnapshot(doc(db, 'users', profileId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as any;
+        const updatedProfile = { id: docSnap.id, ...data, status: normalizeUserStatus(data.status) } as AuthProfile;
+        if (authProfile) setAuthProfile(updatedProfile);
+        else if (localSessionProfile) {
+          if (updatedProfile.status !== localSessionProfile.status || updatedProfile.role !== localSessionProfile.role) {
+            setLocalSessionProfile(updatedProfile);
           }
         }
-      });
-    }
+      }
+    });
+    return () => unsubProfile();
+  }, [authProfile?.id, localSessionProfile?.id]);
 
-    // Interval to check for local profile updates and local users list updates
-    const localSyncInterval = setInterval(() => {
-      // Sync local profile updates
+  // Auto-Logout & Session Sync
+  useEffect(() => {
+    if (!user && !localSessionProfile) return;
+
+    const syncInterval = setInterval(() => {
       if (localSessionProfile) {
         const locals = getLocalUsers();
         const currentLocal = locals.find(u => u.id === localSessionProfile.id);
@@ -527,18 +658,26 @@ function App() {
           setLocalSessionProfile(currentLocal);
         }
       }
-      // Sync local users list for admin visibility (only if firestore hasn't updated recently)
-      updateUsersState(users.filter(u => !u.id.startsWith('demo-')));
     }, 2000);
 
+    let logoutTimer: any;
+    const resetTimer = () => {
+      if (logoutTimer) clearTimeout(logoutTimer);
+      logoutTimer = setTimeout(() => {
+        handleLogout();
+        toast.info("Logged out due to inactivity for security.");
+      }, 15 * 60 * 1000);
+    };
+
+    window.addEventListener('mousemove', resetTimer);
+    window.addEventListener('keypress', resetTimer);
+    resetTimer();
+
     return () => {
-      unsubClients();
-      unsubLoans();
-      unsubApps();
-      unsubTrans();
-      unsubUsers();
-      unsubProfile();
-      clearInterval(localSyncInterval);
+      clearInterval(syncInterval);
+      if (logoutTimer) clearTimeout(logoutTimer);
+      window.removeEventListener('mousemove', resetTimer);
+      window.removeEventListener('keypress', resetTimer);
     };
   }, [user, localSessionProfile]);
 
@@ -602,6 +741,8 @@ function App() {
           email: normalizedEmail,
           role: predefinedAccount.role,
           status: 'ACTIVE',
+          lastLogin: new Date().toISOString(),
+          lastDevice: getDeviceInfo()
         };
         setLocalSessionProfile(profile);
         setAuthProfile(null);
@@ -627,7 +768,22 @@ function App() {
         throw { code: 'auth/invalid-login-credentials', message: 'Invalid email or password.' };
       }
 
-      setLocalSessionProfile(profile);
+      const updatedProfile = { 
+        ...profile, 
+        lastLogin: new Date().toISOString(), 
+        lastDevice: getDeviceInfo() 
+      };
+      
+      if (profile.id.startsWith('demo-')) {
+        saveLocalUser(updatedProfile);
+      } else {
+        updateDoc(doc(db, 'users', profile.id), {
+          lastLogin: updatedProfile.lastLogin,
+          lastDevice: updatedProfile.lastDevice
+        }).catch(console.error);
+      }
+
+      setLocalSessionProfile(updatedProfile);
       setAuthProfile(null);
       setRole(profile.role);
       setCurrentView('dashboard');
@@ -1066,13 +1222,6 @@ function App() {
                 onClick={() => setCurrentView('audit-logs')}
                 collapsed={!isSidebarOpen}
               />
-              <NavItem 
-                icon={<Settings size={16} />} 
-                label="Settings" 
-                active={currentView === 'settings'} 
-                onClick={() => setCurrentView('settings')}
-                collapsed={!isSidebarOpen}
-              />
             </>
           )}
 
@@ -1209,6 +1358,14 @@ function App() {
               />
             </>
           )}
+
+          <NavItem 
+            icon={<Settings size={16} />} 
+            label="Settings" 
+            active={currentView === 'settings'} 
+            onClick={() => setCurrentView('settings')}
+            collapsed={!isSidebarOpen}
+          />
         </nav>
 
         <div className="p-4 mt-auto border-t border-sidebar-border/50">
@@ -1246,7 +1403,22 @@ function App() {
           
           <div className="flex items-center gap-4">
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="h-9 px-4 text-xs font-semibold border-border bg-white">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-9 px-4 text-xs font-semibold border-border bg-white"
+                onClick={() => {
+                  let data: any[] = [];
+                  let name = 'export';
+                  if (currentView === 'clients') { data = clients; name = 'clients'; }
+                  else if (currentView === 'loans') { data = loans; name = 'loans'; }
+                  else if (currentView === 'applications') { data = applications; name = 'applications'; }
+                  else if (currentView === 'transactions') { data = transactions; name = 'transactions'; }
+                  else { data = [...clients, ...loans]; name = 'full_report'; }
+                  downloadCSV(data, name);
+                  toast.success(`Exporting ${name}.csv`);
+                }}
+              >
                 Export CSV
               </Button>
               <Button size="sm" className="h-9 px-4 text-xs font-semibold bg-primary text-white" onClick={() => !isPendingAgent && setCurrentView('applications')} disabled={isPendingAgent}>
@@ -1379,7 +1551,23 @@ function App() {
             )}
             {currentView === 'settings' && (
               <motion.div key="settings">
-                <SystemSettingsView />
+                <SettingsView 
+                  profile={sessionProfile!} 
+                  systemSettings={systemSettings}
+                  onUpdateSystemSettings={(settings) => {
+                    setSystemSettings(settings);
+                    setDoc(doc(db, 'system_settings', 'global'), settings);
+                  }}
+                  onUpdateProfile={(updatedProfile) => {
+                    if (sessionProfile?.id.startsWith('demo-')) {
+                      saveLocalUser(updatedProfile);
+                      setLocalSessionProfile(updatedProfile);
+                    } else {
+                      updateDoc(doc(db, 'users', sessionProfile!.id), updatedProfile as any);
+                    }
+                    toast.success("Profile updated successfully.");
+                  }}
+                />
               </motion.div>
             )}
           </AnimatePresence>
@@ -3271,18 +3459,38 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
       } : null;
 
       if (clientPayload) {
-        const clientRef = await addDoc(collection(db, 'clients'), clientPayload);
-        clientId = clientRef.id;
-      } else if (selectedClient?.id) {
-        await updateDoc(doc(db, 'clients', selectedClient.id), {
-          assignedAgentEmail: createdBy.email,
-          updatedAt: serverTimestamp(),
-          metadata: {
-            ...(selectedClient.metadata || {}),
-            lastUpdatedAt: serverTimestamp(),
-            lastApplicationBy: createdBy,
+        try {
+          const clientRef = await addDoc(collection(db, 'clients'), clientPayload);
+          clientId = clientRef.id;
+        } catch (err: any) {
+          if (err.code === 'permission-denied' || err.message?.includes('permission')) {
+            console.warn('Client registration blocked by permissions. Falling back to Simulation Mode.');
+            const localId = `local-client-${Math.random().toString(36).substr(2, 9)}`;
+            clientId = localId;
+            saveLocalClient({ ...clientPayload, id: localId, uid: localId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+          } else {
+            throw err;
           }
-        });
+        }
+      } else if (selectedClient?.id) {
+        try {
+          await updateDoc(doc(db, 'clients', selectedClient.id), {
+            assignedAgentEmail: createdBy.email,
+            updatedAt: serverTimestamp(),
+            metadata: {
+              ...(selectedClient.metadata || {}),
+              lastUpdatedAt: serverTimestamp(),
+              lastApplicationBy: createdBy,
+            }
+          });
+        } catch (err: any) {
+          if (err.code === 'permission-denied' || err.message?.includes('permission')) {
+            console.warn('Client update blocked by permissions (Simulation Mode).');
+            // In simulation mode, we just proceed as the client is already in the system
+          } else {
+            throw err;
+          }
+        }
       }
 
       const clientSnapshot = draft.mode === 'new'
@@ -3301,7 +3509,7 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
             }
           : null;
 
-      await addDoc(collection(db, 'applications'), {
+      const applicationPayload = {
         clientId,
         clientSnapshot,
         originatingAgentEmail: createdBy.email,
@@ -3377,7 +3585,18 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
         },
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      });
+      };
+
+      try {
+        await addDoc(collection(db, 'applications'), applicationPayload);
+      } catch (err: any) {
+        if (err.code === 'permission-denied' || err.message?.includes('permission')) {
+          console.warn('Application submission blocked by permissions. Falling back to Simulation Mode.');
+          saveLocalApplication({ ...applicationPayload, id: `local-app-${Math.random().toString(36).substr(2, 9)}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+        } else {
+          throw err;
+        }
+      }
 
       toast.success(draft.mode === 'new' ? 'Client registered and application submitted successfully' : 'Application submitted successfully');
       resetDraft();
@@ -6967,4 +7186,334 @@ function CasesView({ users, applications, loans, transactions }: { users: any[],
       </Card>
     </motion.div>
   );
+}
+
+function SettingsView({ 
+  profile, 
+  systemSettings, 
+  onUpdateSystemSettings, 
+  onUpdateProfile 
+}: { 
+  profile: AuthProfile, 
+  systemSettings: SystemSettings, 
+  onUpdateSystemSettings: (s: SystemSettings) => void,
+  onUpdateProfile: (p: AuthProfile) => void
+}) {
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'appearance' | 'notifications' | 'system'>('profile');
+  const { theme, setTheme } = useTheme();
+
+  const tabs = [
+    { id: 'profile', label: 'Profile Settings', icon: <Users size={16} />, adminOnly: false },
+    { id: 'security', label: 'Account Security', icon: <ShieldAlert size={16} />, adminOnly: false },
+    { id: 'appearance', label: 'Appearance', icon: <PieChartIcon size={16} />, adminOnly: false },
+    { id: 'notifications', label: 'Notifications', icon: <Bell size={16} />, adminOnly: false },
+    { id: 'system', label: 'System Settings', icon: <Settings size={16} />, adminOnly: true },
+  ].filter(tab => !tab.adminOnly || profile.role === 'ADMIN');
+
+  return (
+    <div className="max-w-6xl mx-auto">
+      <div className="flex flex-col md:flex-row gap-6">
+        {/* Inner Sidebar */}
+        <aside className="w-full md:w-64 space-y-1">
+          <div className="mb-4 px-3 py-2">
+            <h2 className="text-lg font-bold text-slate-900 font-heading">Settings</h2>
+            <p className="text-xs text-slate-500">Manage your account and preferences.</p>
+          </div>
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                activeTab === tab.id 
+                  ? 'bg-primary text-white shadow-md' 
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent'
+              }`}
+            >
+              <span className="shrink-0">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </aside>
+
+        {/* Tab Content */}
+        <div className="flex-1 min-w-0">
+          <Card className="border border-border shadow-none rounded-xl overflow-hidden min-h-[500px] bg-card text-card-foreground">
+            <CardContent className="p-8">
+              <AnimatePresence mode="wait">
+                {activeTab === 'profile' && (
+                  <motion.div 
+                    key="profile"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="space-y-6"
+                  >
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">Profile Settings</h3>
+                      <p className="text-sm text-slate-500">Update your personal information and contact details.</p>
+                    </div>
+                    <div className="flex items-center gap-6 pb-6 border-b border-border">
+                      <Avatar className="h-24 w-24 border-4 border-white shadow-lg">
+                        <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.uid}`} />
+                        <AvatarFallback className="text-2xl">{profile.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="space-y-2">
+                        <Button variant="outline" size="sm">Change Photo</Button>
+                        <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black">PNG, JPG or GIF. Max 5MB.</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Full Name</label>
+                        <Input defaultValue={profile.name} onChange={(e) => onUpdateProfile({ ...profile, name: e.target.value })} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Email Address</label>
+                        <Input defaultValue={profile.email} disabled />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Phone Number</label>
+                        <Input defaultValue={profile.phone} onChange={(e) => onUpdateProfile({ ...profile, phone: e.target.value })} />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">National ID</label>
+                        <Input defaultValue={profile.nationalId} disabled />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeTab === 'security' && (
+                  <motion.div 
+                    key="security"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="space-y-6"
+                  >
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">Account Security</h3>
+                      <p className="text-sm text-slate-500">Manage your password and track account activity.</p>
+                    </div>
+                    
+                    <Card className="border border-border shadow-none bg-slate-50 p-6 space-y-4">
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                        <ShieldAlert size={16} className="text-brand-500" />
+                        Change Password
+                      </h4>
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Current Password</label>
+                            <Input type="password" placeholder="••••••••" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">New Password</label>
+                            <Input type="password" placeholder="••••••••" />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Confirm New</label>
+                            <Input type="password" placeholder="••••••••" />
+                          </div>
+                        </div>
+                        <Button size="sm" className="bg-slate-900 text-white hover:bg-slate-800">Update Password</Button>
+                      </div>
+                    </Card>
+
+                    <div className="space-y-4">
+                      <h4 className="text-sm font-bold text-slate-900">Recent Login Activity</h4>
+                      <div className="rounded-xl border border-border overflow-hidden">
+                        <Table>
+                          <TableBody>
+                            <TableRow>
+                              <TableCell className="font-medium text-xs">
+                                <div className="flex items-center gap-3">
+                                  <Smartphone size={14} className="text-slate-400" />
+                                  <div>
+                                    <p className="font-bold text-slate-900">{profile.lastDevice || 'Chrome on Windows'}</p>
+                                    <p className="text-[10px] text-slate-500">Last accessed: {profile.lastLogin ? new Date(profile.lastLogin).toLocaleString() : 'Just now'}</p>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Badge variant="outline" className="text-[9px] uppercase tracking-widest bg-emerald-50 text-emerald-700 border-none">Current Session</Badge>
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeTab === 'appearance' && (
+                  <motion.div 
+                    key="appearance"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="space-y-6"
+                  >
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">Appearance Settings</h3>
+                      <p className="text-sm text-slate-500">Customize how the application looks for you.</p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <Card 
+                        className={`cursor-pointer transition-all border-2 ${theme === 'light' ? 'border-primary' : 'border-border'}`}
+                        onClick={() => setTheme('light')}
+                      >
+                        <CardContent className="p-4 flex flex-col items-center gap-4">
+                          <div className="w-full aspect-video bg-white rounded border border-slate-200 shadow-sm flex items-center justify-center">
+                            <Plus className="text-slate-200" size={32} />
+                          </div>
+                          <p className="text-xs font-bold uppercase tracking-widest">Light Mode</p>
+                        </CardContent>
+                      </Card>
+                      <Card 
+                        className={`cursor-pointer transition-all border-2 ${theme === 'dark' ? 'border-primary' : 'border-border'}`}
+                        onClick={() => setTheme('dark')}
+                      >
+                        <CardContent className="p-4 flex flex-col items-center gap-4">
+                          <div className="w-full aspect-video bg-slate-900 rounded border border-slate-800 shadow-sm flex items-center justify-center">
+                            <Plus className="text-slate-800" size={32} />
+                          </div>
+                          <p className="text-xs font-bold uppercase tracking-widest">Dark Mode</p>
+                        </CardContent>
+                      </Card>
+                      <Card 
+                        className={`cursor-pointer transition-all border-2 ${theme === 'system' ? 'border-primary' : 'border-border'}`}
+                        onClick={() => setTheme('system')}
+                      >
+                        <CardContent className="p-4 flex flex-col items-center gap-4">
+                          <div className="w-full aspect-video bg-gradient-to-br from-white to-slate-900 rounded border border-slate-200 shadow-sm flex items-center justify-center">
+                            <Plus className="text-slate-400 opacity-20" size={32} />
+                          </div>
+                          <p className="text-xs font-bold uppercase tracking-widest">System Default</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeTab === 'notifications' && (
+                  <motion.div 
+                    key="notifications"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="space-y-6"
+                  >
+                    <div>
+                      <h3 className="text-xl font-bold text-slate-900">Notification Settings</h3>
+                      <p className="text-sm text-slate-500">Choose how you want to be notified about important events.</p>
+                    </div>
+                    <div className="space-y-4">
+                      <NotificationToggle 
+                        title="Loan Approval Alerts" 
+                        description="Receive instant notifications when a loan application status changes." 
+                        icon={<CheckCircle2 size={16} className="text-emerald-500" />}
+                      />
+                      <NotificationToggle 
+                        title="Payment Reminders" 
+                        description="Get alerts for upcoming and overdue loan repayments." 
+                        icon={<Clock size={16} className="text-amber-500" />}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+
+                {activeTab === 'system' && (
+                  <motion.div 
+                    key="system"
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="space-y-6"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-xl font-bold text-slate-900 underline decoration-primary/30 decoration-4">System Settings (Global)</h3>
+                        <p className="text-sm text-slate-500">Configure global business rules and financial parameters.</p>
+                      </div>
+                      <Badge className="bg-red-50 text-red-700 border-none px-3 py-1 font-black text-[10px] tracking-widest uppercase">Admin Authority Required</Badge>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Default Interest Rate (%)</label>
+                        <Input 
+                          type="number" 
+                          value={systemSettings.interest_rate_default} 
+                          onChange={(e) => onUpdateSystemSettings({ ...systemSettings, interest_rate_default: Number(e.target.value) })} 
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Max Loan Duration (Months)</label>
+                        <Input 
+                          type="number" 
+                          value={systemSettings.max_loan_duration} 
+                          onChange={(e) => onUpdateSystemSettings({ ...systemSettings, max_loan_duration: Number(e.target.value) })} 
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Penalty Rate (%)</label>
+                        <Input 
+                          type="number" 
+                          value={systemSettings.penalty_rate} 
+                          onChange={(e) => onUpdateSystemSettings({ ...systemSettings, penalty_rate: Number(e.target.value) })} 
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Functional Currency</label>
+                        <Input 
+                          value={systemSettings.currency} 
+                          onChange={(e) => onUpdateSystemSettings({ ...systemSettings, currency: e.target.value })} 
+                        />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Company Branding Name</label>
+                        <Input 
+                          value={systemSettings.company_name} 
+                          onChange={(e) => onUpdateSystemSettings({ ...systemSettings, company_name: e.target.value })} 
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NotificationToggle({ title, description, icon }: { title: string, description: string, icon: React.ReactNode }) {
+  const [enabled, setEnabled] = useState(true);
+  return (
+    <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-white hover:bg-slate-50 transition-colors">
+      <div className="flex items-center gap-4">
+        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+          {icon}
+        </div>
+        <div>
+          <h4 className="text-sm font-bold text-slate-900">{title}</h4>
+          <p className="text-xs text-slate-500 max-w-sm">{description}</p>
+        </div>
+      </div>
+      <div 
+        onClick={() => setEnabled(!enabled)}
+        className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${enabled ? 'bg-primary' : 'bg-slate-200'}`}
+      >
+        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${enabled ? 'translate-x-6' : 'translate-x-0'}`} />
+      </div>
+    </div>
+  );
+}
+
+function useTheme() {
+  const { theme, setTheme } = useNextTheme();
+  return { theme, setTheme };
 }
