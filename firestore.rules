@@ -1,0 +1,122 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: clients
+// Document ID: auto-generated or clientId
+// Fields:
+//   - name: string (required)
+//   - email: string (required, email format)
+//   - phone: string (optional)
+//   - status: string (required, enum: ACTIVE, PENDING_KYC, BLACKLISTED)
+//   - kycStatus: string (required, enum: VERIFIED, PENDING, REJECTED)
+//   - totalBalance: number (required)
+//   - loanCount: number (required)
+//   - createdAt: timestamp (required)
+//
+// Collection: loans
+// Document ID: auto-generated
+// Fields:
+//   - clientId: string (required)
+//   - type: string (required, enum: COMMERCIAL, SME, PERSONAL)
+//   - amount: number (required)
+//   - interestRate: number (required)
+//   - termMonths: number (required)
+//   - status: string (required, enum: ACTIVE, REPAID, DEFAULTED, IN_REVIEW)
+//   - disbursedAt: timestamp (optional)
+//   - outstandingBalance: number (required)
+//
+// Collection: applications
+// Document ID: auto-generated
+// Fields:
+//   - clientId: string (required)
+//   - requestedAmount: number (required)
+//   - termMonths: number (required)
+//   - purpose: string (optional)
+//   - employmentStatus: string (required, enum: EMPLOYED, SELF_EMPLOYED, BUSINESS_OWNER, CONTRACTOR, OTHER)
+//   - annualIncome: number (required)
+//   - status: string (required, enum: SUBMITTED, IN_REVIEW, APPROVED, REJECTED)
+//   - createdAt: timestamp (required)
+//
+// Collection: transactions
+// Document ID: auto-generated
+// Fields:
+//   - loanId: string (required)
+//   - type: string (required, enum: DISBURSEMENT, REPAYMENT)
+//   - amount: number (required)
+//   - method: string (required)
+//   - timestamp: timestamp (required)
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (
+          (request.auth.token.email == "cen-01-41-23@unilia.ac.mw") ||
+          (request.auth.token.email == "admin@fastkwacha.com") ||
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+        );
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isPositive(val) {
+      return val is number && val >= 0;
+    }
+
+    function isValidApplication(data) {
+      return data.clientId is string &&
+             isPositive(data.requestedAmount) &&
+             isPositive(data.termMonths) &&
+             (data.purpose is string || !('purpose' in data)) &&
+             data.employmentStatus in ['EMPLOYED', 'SELF_EMPLOYED', 'BUSINESS_OWNER', 'CONTRACTOR', 'OTHER'] &&
+             isPositive(data.annualIncome) &&
+             data.status in ['SUBMITTED', 'IN_REVIEW', 'APPROVED', 'REJECTED'];
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /{document=**} {
+      allow read, write: if true;
+    }
+
+    match /users/{userId} {
+      allow read, create: if true;
+      allow update, delete: if true; // Demo mode: Allow updates for approval flow
+    }
+
+    match /clients/{clientId} {
+      allow read, write: if true;
+    }
+
+    match /loans/{loanId} {
+      allow read, write: if true;
+    }
+
+    match /applications/{applicationId} {
+      allow read, write: if true;
+    }
+
+    match /transactions/{transactionId} {
+      allow read, write: if true;
+    }
+
+    match /settings/{settingId} {
+      allow read, write: if true;
+    }
+  }
+}
