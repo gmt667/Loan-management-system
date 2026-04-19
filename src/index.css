@@ -136,3 +136,58 @@
     @apply font-sans;
     }
 }
+
+/* Financial Receipt Print Standards */
+@media print {
+  @page {
+    size: A4;
+    margin: 20mm;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  /* Only show the receipt modal content */
+  div.fixed.inset-0.z-\[100\], 
+  div.fixed.inset-0.z-\[100\] * {
+    visibility: visible;
+  }
+
+  div.fixed.inset-0.z-\[100\] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    background: white !important;
+    backdrop-filter: none !important;
+  }
+
+  /* Reset layout for print */
+  .bg-white.rounded-\[2\.5rem\] {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+
+  .print\:p-0 {
+    padding: 0 !important;
+  }
+
+  .print\:static {
+    position: static !important;
+  }
+
+  /* Institutional Fidelity */
+  h1, h2, h3, p, span {
+    color: black !important;
+  }
+}

@@ -4,10 +4,12 @@ import App from './App.tsx';
 import './index.css';
 import { ThemeProvider } from 'next-themes';
 
+const SafeThemeProvider = ThemeProvider as any;
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <SafeThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <App />
-    </ThemeProvider>
+    </SafeThemeProvider>
   </StrictMode>,
 );
