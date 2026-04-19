@@ -752,7 +752,7 @@ const runFinancialMaintenance = async (loans: any[], products: LoanProduct[], gr
         await createNotification(
           'LOAN_DEFAULTED',
           'Loan Marked as DEFAULTED',
-          `Loan for ${loan.clientName || loan.clientId} has been automatically flagged as DEFAULTED — all installments are overdue.`,
+          `Loan for ${loan.clientName || loan.clientId} has been automatically flagged as DEFAULTED â€” all installments are overdue.`,
           'OFFICER',
           loan.id
         );
@@ -2584,7 +2584,7 @@ function App() {
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Master Password</label>
                         <button type="button" className="text-[9px] font-black text-brand-600 uppercase tracking-widest hover:underline">Forgot?</button>
                       </div>
-                      <Input type="password" placeholder="••••••••" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                      <Input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={password} onChange={(e) => setPassword(e.target.value)} required />
                     </div>
                     <Button type="submit" className="w-full h-14 bg-slate-900 hover:bg-brand-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-slate-900/10 transition-all">
                       Authorize Access
@@ -2616,11 +2616,11 @@ function App() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-3">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Master Code</label>
-                        <Input type="password" placeholder="••••••••" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.password} onChange={(e) => setRegistrationData({ ...registrationData, password: e.target.value })} required />
+                        <Input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.password} onChange={(e) => setRegistrationData({ ...registrationData, password: e.target.value })} required />
                       </div>
                       <div className="space-y-3">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Confirm</label>
-                        <Input type="password" placeholder="••••••••" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.confirmPassword} onChange={(e) => setRegistrationData({ ...registrationData, confirmPassword: e.target.value })} required />
+                        <Input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.confirmPassword} onChange={(e) => setRegistrationData({ ...registrationData, confirmPassword: e.target.value })} required />
                       </div>
                     </div>
                     <p className="text-[9px] text-slate-400 italic">Phase 1 of 2: Basic identity creation. Phone and National ID required after login.</p>
@@ -2907,6 +2907,32 @@ function App() {
             </>
           )}
 
+          {role === 'CLIENT' && (
+            <>
+              <NavItem
+                icon={<LayoutDashboard size={16} />}
+                label="My Dashboard"
+                active={currentView === 'dashboard'}
+                onClick={() => setCurrentView('dashboard')}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem
+                icon={<FileEdit size={16} />}
+                label="Apply for Loan"
+                active={currentView === 'applications'}
+                onClick={() => setCurrentView('applications')}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem
+                icon={<Receipt size={16} />}
+                label="My Receipts"
+                active={currentView === 'dashboard'}
+                onClick={() => setCurrentView('dashboard')}
+                collapsed={!isSidebarOpen}
+              />
+            </>
+          )}
+
           <NavItem 
             icon={<Settings size={16} />} 
             label="Settings" 
@@ -2946,7 +2972,7 @@ function App() {
         <header className="h-16 bg-white border-b border-border flex items-center justify-between px-6 shrink-0">
           <div className="flex flex-col">
             <h1 className="text-xl font-bold tracking-tight">Institutional Dashboard</h1>
-            <p className="text-[12px] text-muted-foreground">Operational overview for Central Branch • Q3 FY24</p>
+            <p className="text-[12px] text-muted-foreground">Operational overview for Central Branch â€¢ Q3 FY24</p>
           </div>
           
           <div className="flex items-center gap-4">
@@ -3008,7 +3034,7 @@ function App() {
                           Mark all read
                         </button>
                       )}
-                      <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white text-sm font-bold">✕</button>
+                      <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white text-sm font-bold">âœ•</button>
                     </div>
                   </div>
                   <div className="max-h-96 overflow-y-auto divide-y divide-border">
@@ -3019,9 +3045,9 @@ function App() {
                       </div>
                     ) : notifications.slice(0, 20).map(n => {
                       const icons: Record<string, string> = {
-                        LOAN_APPROVED: '✅', LOAN_REJECTED: '❌', PAYMENT_RECEIVED: '💰',
-                        PAYMENT_REMINDER: '⏰', LOAN_OVERDUE: '⚠️', LOAN_DEFAULTED: '🔴',
-                        STAGE_CHANGE: '🔄', CRB_READY: '📋', SYSTEM: '⚙️'
+                        LOAN_APPROVED: 'âœ…', LOAN_REJECTED: 'âŒ', PAYMENT_RECEIVED: 'ðŸ’°',
+                        PAYMENT_REMINDER: 'â°', LOAN_OVERDUE: 'âš ï¸', LOAN_DEFAULTED: 'ðŸ”´',
+                        STAGE_CHANGE: 'ðŸ”„', CRB_READY: 'ðŸ“‹', SYSTEM: 'âš™ï¸'
                       };
                       return (
                         <div
@@ -3034,7 +3060,7 @@ function App() {
                           }}
                         >
                           <div className="flex items-start gap-3">
-                            <span className="text-base mt-0.5">{icons[n.type] || '🔔'}</span>
+                            <span className="text-base mt-0.5">{icons[n.type] || 'ðŸ””'}</span>
                             <div className="flex-1 min-w-0">
                               <p className={`text-xs font-bold truncate ${!n.isRead ? 'text-slate-900' : 'text-slate-600'}`}>{n.title}</p>
                               <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
@@ -3080,8 +3106,8 @@ function App() {
                   />
                 ) : role === 'CLIENT' ? (
                   <ClientDashboardView 
-                    loans={loans}
-                    receipts={receipts}
+                    loans={loans.filter(l => l.clientSnapshot?.email === (sessionProfile?.email || user?.email) || l.clientId === sessionProfile?.id)}
+                    receipts={receipts.filter(r => r.clientId === sessionProfile?.id || loans.some(l => l.id === r.loanId && (l.clientSnapshot?.email === (sessionProfile?.email || user?.email) || l.clientId === sessionProfile?.id)))}
                     profile={sessionProfile}
                     onNavigate={(v) => setCurrentView(v)}
                     onPay={(loan) => {
@@ -3129,7 +3155,7 @@ function App() {
             )}
             {currentView === 'applications' && (
               <motion.div key="applications">
-                {isPendingAgent ? <PendingAgentWorkspace profile={sessionProfile!} /> : <ApplicationsView clients={clients} applications={applications} role={role} sessionProfile={sessionProfile!} uploadDocument={uploadDocument} />}
+                {isPendingAgent ? <PendingAgentWorkspace profile={sessionProfile!} /> : <ApplicationsView clients={role === 'CLIENT' ? clients.filter(c => c.email === (sessionProfile?.email || user?.email) || c.id === sessionProfile?.id) : clients} applications={role === 'CLIENT' ? applications.filter(a => a.clientSnapshot?.email === (sessionProfile?.email || user?.email) || a.clientId === sessionProfile?.id || a.clientEmail === (sessionProfile?.email || user?.email)) : applications} role={role} sessionProfile={sessionProfile!} uploadDocument={uploadDocument} />}
               </motion.div>
             )}
             {currentView === 'approvals' && (
@@ -4945,7 +4971,7 @@ function CreditAnalystDashboardView({
   const kycCoverage = clients.length > 0 ? (clients.filter(client => getClientIdNumber(client)).length / clients.length) * 100 : 100;
   const auditScore = Math.max(60, Math.round(100 - (anomalies.length * 4) - (100 - kycCoverage) * 0.2));
 
-  // 📊 Analytics Data Preparation
+  // ðŸ“Š Analytics Data Preparation
   const accuracyData = users.filter(u => u.role === 'CREDIT_ANALYST').map(analyst => {
      const analystLogs = workflowHistory.filter(h => h.managerId === analyst.email || h.comment.includes(analyst.email));
      const approvalDecisions = analystLogs.filter(h => h.comment.includes('APPROVE'));
@@ -4992,7 +5018,7 @@ function CreditAnalystDashboardView({
     <div
       className="flex flex-col h-[calc(100vh-140px)] gap-6"
     >
-      {/* 🧭 TOP NAVIGATION TABS (Ribbon Style) */}
+      {/* ðŸ§­ TOP NAVIGATION TABS (Ribbon Style) */}
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between bg-white border border-border p-1 rounded-xl shadow-sm relative z-[100]">
           <div className="flex gap-1">
@@ -5100,7 +5126,7 @@ function CreditAnalystDashboardView({
                      <p className="text-xs font-bold mb-2 uppercase text-slate-400">Recent Alerts</p>
                      {anomalies.slice(0, 3).map(a => (
                         <div key={a.id} className="text-[11px] py-1 border-b border-slate-50 last:border-0 truncate">
-                          <span className={a.severity === 'CRITICAL' ? 'text-red-500' : 'text-amber-500'}>●</span> {a.description}
+                          <span className={a.severity === 'CRITICAL' ? 'text-red-500' : 'text-amber-500'}>â—</span> {a.description}
                         </div>
                      ))}
                   </Card>
@@ -5112,7 +5138,7 @@ function CreditAnalystDashboardView({
           {activeTab === 'QUEUE' && (
              <div className="flex h-full gap-5 overflow-hidden p-4">
 
-                {/* 📋 LEFT PANEL: Loan Queue */}
+                {/* ðŸ“‹ LEFT PANEL: Loan Queue */}
                 <Card className="w-80 flex flex-col border border-border bg-white shadow-none overflow-hidden shrink-0">
                   <div className="p-4 border-b border-border bg-slate-50 flex items-center justify-between">
                     <h3 className="text-[11px] font-black uppercase tracking-tighter text-slate-700">Analyst Queue ({analysisApps.length})</h3>
@@ -5156,7 +5182,7 @@ function CreditAnalystDashboardView({
                   </div>
                 </Card>
 
-                {/* 📄 CENTER PANEL: Loan Detail View */}
+                {/* ðŸ“„ CENTER PANEL: Loan Detail View */}
                 <div className="flex-1 flex flex-col gap-5 overflow-hidden">
                   {selectedApp ? (
                     <>
@@ -5242,7 +5268,7 @@ function CreditAnalystDashboardView({
                         </section>
                       </Card>
 
-                      {/* 🎬 ACTION PANEL */}
+                      {/* ðŸŽ¬ ACTION PANEL */}
                       <div className="flex gap-3 h-14 shrink-0">
                         <Button 
                           className="flex-1 h-full bg-green-600 hover:bg-green-700 font-bold uppercase tracking-widest"
@@ -5274,7 +5300,7 @@ function CreditAnalystDashboardView({
                   )}
                 </div>
 
-                {/* 🧠 RIGHT PANEL: Risk & AI Insights */}
+                {/* ðŸ§  RIGHT PANEL: Risk & AI Insights */}
                 <div className="w-80 flex flex-col gap-5 shrink-0 overflow-y-auto pr-1">
                   {selectedApp ? (
                     <>
@@ -5574,7 +5600,7 @@ function CreditAnalystDashboardView({
              </motion.div>
           )}
 
-          {/* 🧾 MODAL: Manual CRB Entry */}
+          {/* ðŸ§¾ MODAL: Manual CRB Entry */}
           {showManualCRB && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden">
@@ -5635,7 +5661,7 @@ function CreditAnalystDashboardView({
             </div>
           )}
 
-          {/* 🔄 MODAL: Refer Back */}
+          {/* ðŸ”„ MODAL: Refer Back */}
           {showReferBack && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
@@ -7284,7 +7310,7 @@ function ApplicationsView({ clients, applications, role, sessionProfile, uploadD
                       </Avatar>
                       <div>
                         <p className="font-bold text-sm">{getClientName(client)}</p>
-                        <p className="text-xs text-slate-500">Phone: {getClientPrimaryPhone(client) || 'N/A'} • ID: {getClientIdNumber(client) || 'N/A'}</p>
+                        <p className="text-xs text-slate-500">Phone: {getClientPrimaryPhone(client) || 'N/A'} â€¢ ID: {getClientIdNumber(client) || 'N/A'}</p>
                       </div>
                     </div>
                     {selectedClient?.id === client.id && <CheckCircle2 className="text-blue-600" size={20} />}
@@ -7571,8 +7597,8 @@ function ApplicationsView({ clients, applications, role, sessionProfile, uploadD
                   { label: 'District', value: draft.mode === 'existing' ? selectedClient?.district || 'Existing profile' : draft.district || 'N/A' },
                   { label: 'Employment', value: formatEmploymentLabel(draft.employmentStatus) },
                   { label: 'Monthly Income', value: `MWK ${monthlyIncome.toLocaleString()}` },
-                  { label: 'Existing Debt', value: hasExistingLoanDetails ? `Yes • MWK ${outstandingBalance.toLocaleString()}` : 'No' },
-                  { label: 'Payment Details', value: usesBankingDetails ? `${draft.bankName || 'No bank selected'} • ${draft.bankAccountNumber || 'No account number'}` : `${draft.mobileMoneyProvider} • ${draft.mobileMoneyNumber || 'No number'}` },
+                  { label: 'Existing Debt', value: hasExistingLoanDetails ? `Yes â€¢ MWK ${outstandingBalance.toLocaleString()}` : 'No' },
+                  { label: 'Payment Details', value: usesBankingDetails ? `${draft.bankName || 'No bank selected'} â€¢ ${draft.bankAccountNumber || 'No account number'}` : `${draft.mobileMoneyProvider} â€¢ ${draft.mobileMoneyNumber || 'No number'}` },
                   { label: 'Loan Product', value: draft.loanProduct },
                   { label: 'Requested Amount', value: `MWK ${requestedAmount.toLocaleString()}` },
                   { label: 'Term', value: `${termMonths} months` },
@@ -7655,7 +7681,7 @@ function ApplicationsView({ clients, applications, role, sessionProfile, uploadD
               {applications.slice(0, 4).map(app => (
                 <div key={app.id} className="rounded-lg border border-slate-100 p-3">
                   <p className="text-sm font-bold text-slate-900">{app.clientSnapshot?.name || `Client ${app.clientId?.slice(0, 8) || 'N/A'}`}</p>
-                  <p className="text-[11px] text-slate-500">MWK {(app.requestedAmount || 0).toLocaleString()} • {app.status}</p>
+                  <p className="text-[11px] text-slate-500">MWK {(app.requestedAmount || 0).toLocaleString()} â€¢ {app.status}</p>
                 </div>
               ))}
               {applications.length === 0 && (
@@ -7922,7 +7948,7 @@ function ApprovalsView({
                       <Badge className="bg-slate-100 text-slate-600 border-none text-[10px] font-bold">
                         {(app.current_stage || 'SUBMITTED').replace('_', ' ')}
                       </Badge>
-                      <p className="text-[11px] text-slate-400">• Created {getRelativeTimeLabel(app.createdAt)}</p>
+                      <p className="text-[11px] text-slate-400">â€¢ Created {getRelativeTimeLabel(app.createdAt)}</p>
                     </div>
                     <div className="mt-2">
                        <h4 className="font-bold text-[13px] text-foreground">Application #{app.id.slice(0, 8).toUpperCase()}</h4>
@@ -8382,7 +8408,7 @@ function RepaymentRow({ loan, role }: any) {
                 <div className="bg-slate-900 p-6 text-white flex justify-between items-center">
                   <div>
                     <h3 className="text-lg font-bold">Repayment Schedule</h3>
-                    <p className="text-slate-400 text-xs mt-1">Loan ID: #{id} • {loan.clientName}</p>
+                    <p className="text-slate-400 text-xs mt-1">Loan ID: #{id} â€¢ {loan.clientName}</p>
                   </div>
                   <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" onClick={() => setShowSchedule(false)}>
                     <X size={20} />
@@ -8439,7 +8465,7 @@ function RepaymentRow({ loan, role }: any) {
                               <TableCell className="px-2 py-3">
                                 {item.penaltyAmount > 0 ? (
                                   <span className="text-red-600 font-bold">MWK {item.penaltyAmount.toLocaleString()}</span>
-                                ) : '—'}
+                                ) : 'â€”'}
                               </TableCell>
                               <TableCell className="font-black px-2 py-3">MWK {(item.total + (item.penaltyAmount || 0)).toLocaleString()}</TableCell>
                               <TableCell className="px-2 py-3 text-emerald-600 font-bold">MWK {item.paidAmount?.toLocaleString() || 0}</TableCell>
@@ -8513,7 +8539,7 @@ function RepaymentAuditView({ transactions, loans, onVerifyRepayment }: { transa
                         </div>
                         <div>
                           <h3 className="font-black text-lg text-slate-900 tracking-tight">Repayment: MWK {tx.amount.toLocaleString()}</h3>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loan Ref: {tx.loanId.slice(-8).toUpperCase()} • {loan?.clientSnapshot?.name || 'Unknown Client'}</p>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loan Ref: {tx.loanId.slice(-8).toUpperCase()} â€¢ {loan?.clientSnapshot?.name || 'Unknown Client'}</p>
                         </div>
                       </div>
                       <Badge className="bg-amber-50 text-amber-600 border-none font-black text-[10px] px-3 py-1.5 rounded-xl uppercase tracking-widest">PENDING VERIFICATION</Badge>
@@ -8956,7 +8982,7 @@ function LoanOfficerDashboardView({
                     <p className="font-semibold text-foreground">{item.clientName}</p>
                     <p className="text-[11px] text-muted-foreground mt-1">
                       {formatCurrency(item.application.requestedAmount || 0)} requested
-                      {' '}• KYC {item.kycStatus.replace(/_/g, ' ')}
+                      {' '}â€¢ KYC {item.kycStatus.replace(/_/g, ' ')}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-1">Exposure ratio: {item.exposureRatio ? `${item.exposureRatio.toFixed(1)}x monthly income` : 'Income not captured'}</p>
                   </div>
@@ -9290,7 +9316,7 @@ function StaffDashboardView({
           <div className="p-4 border-b border-border flex items-center justify-between">
             <div>
               <h3 className="text-sm font-bold">Application Tracker</h3>
-              <p className="text-[12px] text-muted-foreground mt-1">Status of applications you’ve submitted.</p>
+              <p className="text-[12px] text-muted-foreground mt-1">Status of applications youâ€™ve submitted.</p>
             </div>
             <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-brand-600" onClick={() => onNavigate('applications')}>OPEN APPLICATIONS</Button>
           </div>
@@ -10659,7 +10685,7 @@ function ReportsView({
               value={dateRange.start}
               onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
             />
-            <span className="text-slate-300 mx-1">→</span>
+            <span className="text-slate-300 mx-1">â†’</span>
             <input 
               type="date" 
               className="bg-transparent border-none text-[11px] font-bold focus:ring-0 p-0 text-slate-700" 
@@ -11764,15 +11790,15 @@ function SettingsView({
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Current Password</label>
-                            <Input type="password" placeholder="••••••••" />
+                            <Input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
                           </div>
                           <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">New Password</label>
-                            <Input type="password" placeholder="••••••••" />
+                            <Input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
                           </div>
                           <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Confirm New</label>
-                            <Input type="password" placeholder="••••••••" />
+                            <Input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
                           </div>
                         </div>
                         <Button size="sm" className="bg-slate-900 text-white hover:bg-slate-800">Update Password</Button>
@@ -12425,7 +12451,7 @@ function ClientDashboardView({ loans, receipts, profile, onNavigate, onPay, onVi
                       <Badge className="bg-emerald-50 text-emerald-600 text-[8px] font-black px-2 py-0.5 rounded-lg border-none shadow-sm">{rcpt.status}</Badge>
                     </div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <span className="text-brand-600">{rcpt.receiptId}</span> • {new Date(rcpt.date).toLocaleDateString()} at {new Date(rcpt.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <span className="text-brand-600">{rcpt.receiptId}</span> â€¢ {new Date(rcpt.date).toLocaleDateString()} at {new Date(rcpt.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
