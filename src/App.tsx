@@ -1068,6 +1068,7 @@ interface AuthProfile {
   theme?: 'light' | 'dark' | 'system';
   lastLogin?: string;
   lastDevice?: string;
+  passwordHash?: string;
 }
 
 export interface ReceiptRecord {
@@ -1122,6 +1123,13 @@ const AUTOMATION_LAST_RUN_KEY = 'fastkwacha_automation_last_run';
 const PASSWORD_RULE = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 const PHONE_REGEX = /^(\+?265|0)?(8|9)\d{8}$/;
 const ID_NUMBER_REGEX = /^[A-Z0-9/-]{6,20}$/i;
+const DEFAULT_ROLE_ACCOUNTS: Record<string, { role: UserRole; password: string; name: string }> = {
+  'admin@fastkwacha.com': { role: 'ADMIN', password: 'admin123', name: 'System Admin' },
+  'officer@fastkwacha.com': { role: 'OFFICER', password: 'officer123', name: 'Loan Officer' },
+  'agent.test@fastkwacha.com': { role: 'AGENT', password: 'agent123', name: 'Field Agent' },
+  'manager@fastkwacha.com': { role: 'MANAGER', password: 'manager123', name: 'Operations Manager' },
+  'analyst@fastkwacha.com': { role: 'CREDIT_ANALYST', password: 'analyst123', name: 'Credit Analyst' },
+};
 
 const formatPhoneDisplay = (value: string) => value.replace(/\s+/g, '').trim();
 
@@ -1284,6 +1292,28 @@ const getLocalUsers = (): AuthProfile[] => {
   } catch {
     return [];
   }
+};
+
+const getLocalUserByEmail = (emailAddress: string): AuthProfile | null => {
+  const normalizedEmail = normalizeEmail(emailAddress);
+  const localUser = getLocalUsers().find((user) => normalizeEmail(user.email) === normalizedEmail);
+  return localUser ? (normalizeAuthProfile(localUser) as AuthProfile) : null;
+};
+
+const hashLocalPassword = async (password: string) => {
+  if (!password) return '';
+  if (typeof window === 'undefined' || !window.crypto?.subtle) return password;
+
+  const encoded = new TextEncoder().encode(password);
+  const digest = await window.crypto.subtle.digest('SHA-256', encoded);
+  return Array.from(new Uint8Array(digest))
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+const verifyStoredPassword = async (storedHash: string | undefined, password: string) => {
+  if (!storedHash) return false;
+  return storedHash === await hashLocalPassword(password);
 };
 
 const saveLocalUser = (user: AuthProfile) => {
@@ -1676,13 +1706,50 @@ function App() {
   const sessionProfile = authProfile || localSessionProfile;
   const isPendingStaff = sessionProfile?.role === 'OFFICER' && sessionProfile.status === 'PENDING';
 
-  const predefinedRoleAccounts: Record<string, { role: UserRole; password: string; name: string }> = {
-    'admin@fastkwacha.com': { role: 'ADMIN', password: 'admin123', name: 'System Admin' },
-    'officer@fastkwacha.com': { role: 'OFFICER', password: 'officer123', name: 'Loan Officer' },
-    'agent.test@fastkwacha.com': { role: 'AGENT', password: 'agent123', name: 'Field Agent' },
-    'manager@fastkwacha.com': { role: 'MANAGER', password: 'manager123', name: 'Operations Manager' },
-    'analyst@fastkwacha.com': { role: 'CREDIT_ANALYST', password: 'analyst123', name: 'Credit Analyst' },
-  };
+  const predefinedRoleAccounts = DEFAULT_ROLE_ACCOUNTS;
+
+  const syncLocalPasswordRecord = React.useCallback(async (profile: AuthProfile, nextPassword: string) => {
+    const normalizedEmail = normalizeEmail(profile.email);
+    const existingLocalProfile = getLocalUserByEmail(normalizedEmail);
+    const defaultAccount = predefinedRoleAccounts[normalizedEmail];
+    const passwordHash = await hashLocalPassword(nextPassword);
+    const localProfile = normalizeAuthProfile({
+      ...(existingLocalProfile || {}),
+      ...profile,
+      id: existingLocalProfile?.id || profile.id || `local-${profile.role || defaultAccount?.role || 'CLIENT'}`,
+      uid: existingLocalProfile?.uid || profile.uid || profile.id || `local-${profile.role || defaultAccount?.role || 'CLIENT'}`,
+      name: profile.name || existingLocalProfile?.name || defaultAccount?.name || 'FastKwacha User',
+      email: normalizedEmail,
+      role: profile.role || existingLocalProfile?.role || defaultAccount?.role || 'CLIENT',
+      status: profile.status || existingLocalProfile?.status || 'ACTIVE',
+    });
+
+    saveLocalUser({ ...localProfile, passwordHash } as AuthProfile);
+  }, [predefinedRoleAccounts]);
+
+  const authenticateOfflineProfile = React.useCallback(async (normalizedEmail: string, rawPassword: string) => {
+    const localUser = getLocalUserByEmail(normalizedEmail);
+    if (localUser?.passwordHash && await verifyStoredPassword(localUser.passwordHash, rawPassword)) {
+      return localUser;
+    }
+
+    const defaultAccount = predefinedRoleAccounts[normalizedEmail];
+    if (defaultAccount && defaultAccount.password === rawPassword) {
+      return normalizeAuthProfile({
+        ...(localUser || {}),
+        id: localUser?.id || `local-${defaultAccount.role}`,
+        uid: localUser?.uid || `local-${defaultAccount.role}`,
+        email: normalizedEmail,
+        name: localUser?.name || defaultAccount.name,
+        role: defaultAccount.role,
+        status: localUser?.status || 'ACTIVE',
+        kycComplete: localUser?.kycComplete ?? true,
+        kycStatus: localUser?.kycStatus || 'COMPLETE',
+      });
+    }
+
+    return null;
+  }, [predefinedRoleAccounts]);
 
   const fetchUserProfileByEmail = async (emailAddress: string) => {
     try {
@@ -2521,19 +2588,9 @@ function App() {
     setLoading(true);
     try {
       setLoginError(null);
-      // Check predefined role accounts for simulation
-      if (predefinedRoleAccounts[normalizedEmail] && predefinedRoleAccounts[normalizedEmail].password === password) {
-        const localUser = normalizeAuthProfile({
-          id: `local-${predefinedRoleAccounts[normalizedEmail].role}`,
-          uid: `local-${predefinedRoleAccounts[normalizedEmail].role}`,
-          email: normalizedEmail,
-          name: predefinedRoleAccounts[normalizedEmail].name,
-          role: predefinedRoleAccounts[normalizedEmail].role,
-          status: 'ACTIVE',
-          kycComplete: true,
-          kycStatus: 'COMPLETE',
-        });
-        activateSession(localUser, null, 'manual');
+      const offlineProfile = await authenticateOfflineProfile(normalizedEmail, password);
+      if (offlineProfile) {
+        activateSession(offlineProfile, null, 'manual');
         return;
       }
       
@@ -2548,21 +2605,9 @@ function App() {
       }
       activateSession(profile, credentials.user, 'manual');
     } catch (error: any) {
-      // Local fallback for clients
-      try {
-        const profile = await fetchUserProfileByEmail(normalizedEmail);
-        if (profile) {
-          activateSession(profile, null, 'manual');
-        } else {
-          setLoginError(error.message);
-          toast.error(`Login failed: ${error.message}`);
-        }
-      } catch (fallbackError) {
-        setLoginError(error.message);
-        toast.error(`Login failed: ${error.message}`);
-      } finally {
-        setLoading(false);
-      }
+      const message = error?.message || 'Invalid email or password.';
+      setLoginError(message);
+      toast.error(`Login failed: ${message}`);
       return;
     } finally {
       setLoading(false);
@@ -2691,6 +2736,7 @@ function App() {
       const credentials = await createUserWithEmailAndPassword(auth, normalizedEmail, registrationData.password);
       registrationHydrationRef.current = credentials.user.uid;
 
+      const passwordHash = await hashLocalPassword(registrationData.password);
       const payload = normalizeAuthProfile({
         id: credentials.user.uid,
         uid: credentials.user.uid,
@@ -2718,6 +2764,8 @@ function App() {
         saveLocalUser(payload);
         setLocalSessionProfile(payload);
       }
+
+      saveLocalUser({ ...payload, passwordHash } as AuthProfile);
 
       activateSession(payload, credentials.user, 'manual');
       toast.success('Registration successful. Complete your KYC to unlock loan applications.');
@@ -11261,19 +11309,38 @@ function SettingsView({
       toast.error("New passwords do not match.");
       return;
     }
-    if (passwordState.new.length < 8) {
-      toast.error("Security Protocol: Password must be at least 8 characters.");
+    if (!PASSWORD_RULE.test(passwordState.new)) {
+      toast.error("Security Protocol: Password must be at least 8 characters and include both letters and numbers.");
       return;
     }
 
     try {
       setPasswordUpdating(true);
       const user = auth.currentUser;
-      if (!user || !user.email) throw new Error("No active session found.");
+      const sessionEmail = normalizeEmail(sessionProfile?.email || user?.email || '');
+      const offlineProfile = sessionEmail ? getLocalUserByEmail(sessionEmail) : null;
+      const defaultAccount = sessionEmail ? predefinedRoleAccounts[sessionEmail] : null;
 
-      const credential = EmailAuthProvider.credential(user.email, passwordState.current);
-      await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, passwordState.new);
+      if (user?.email) {
+        const credential = EmailAuthProvider.credential(user.email, passwordState.current);
+        await reauthenticateWithCredential(user, credential);
+        await updatePassword(user, passwordState.new);
+      } else if (offlineProfile?.passwordHash) {
+        const passwordMatches = await verifyStoredPassword(offlineProfile.passwordHash, passwordState.current);
+        if (!passwordMatches) {
+          throw Object.assign(new Error("Invalid current password."), { code: 'auth/wrong-password' });
+        }
+      } else if (defaultAccount) {
+        if (defaultAccount.password !== passwordState.current) {
+          throw Object.assign(new Error("Invalid current password."), { code: 'auth/wrong-password' });
+        }
+      } else {
+        throw new Error("No active session found.");
+      }
+
+      if (sessionProfile?.email) {
+        await syncLocalPasswordRecord(sessionProfile, passwordState.new);
+      }
       
       toast.success("Security status updated. Password changed.");
       setPasswordState({ current: '', new: '', confirm: '' });
@@ -12079,23 +12146,47 @@ function ClientDashboardView({
   };
 
   const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error("Please fill all password fields.");
+      return;
+    }
     if (newPassword !== confirmPassword) {
       toast.error("Passwords do not match.");
       return;
     }
-    if (newPassword.length < 6) {
-      toast.error("Password must be at least 6 characters.");
+    if (!PASSWORD_RULE.test(newPassword)) {
+      toast.error("Password must be at least 8 characters and include both letters and numbers.");
       return;
     }
     setIsChangingPassword(true);
     try {
-      await updatePassword(auth.currentUser!, newPassword);
+      if (!profile?.email) {
+        throw new Error("No active profile found.");
+      }
+
+      const authenticatedUser = auth.currentUser;
+      if (authenticatedUser?.email) {
+        const credential = EmailAuthProvider.credential(authenticatedUser.email, currentPassword);
+        await reauthenticateWithCredential(authenticatedUser, credential);
+        await updatePassword(authenticatedUser, newPassword);
+      } else {
+        const localProfile = getLocalUserByEmail(profile.email);
+        const passwordMatches = await verifyStoredPassword(localProfile?.passwordHash, currentPassword);
+        if (!passwordMatches) {
+          throw Object.assign(new Error("Invalid current password."), { code: 'auth/wrong-password' });
+        }
+      }
+
+      const passwordHash = await hashLocalPassword(newPassword);
+      saveLocalUser({ ...profile, passwordHash } as AuthProfile);
       toast.success("Password updated successfully.");
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (error: any) {
-      if (error.code === 'auth/requires-recent-login') {
+      if (error.code === 'auth/wrong-password') {
+        toast.error("Current password is incorrect.");
+      } else if (error.code === 'auth/requires-recent-login') {
         toast.error("Security re-authentication required. Please logout and login again.");
       } else {
         toast.error(error.message || "Failed to update password.");
@@ -12750,6 +12841,16 @@ function ClientDashboardView({
 
           <div className="space-y-6">
             <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Password</label>
+              <Input 
+                type="password" 
+                placeholder="Current password" 
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold" 
+              />
+            </div>
+            <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">New Secure Password</label>
               <Input 
                 type="password" 
@@ -12771,7 +12872,7 @@ function ClientDashboardView({
             </div>
             <Button 
               onClick={handleChangePassword}
-              disabled={isChangingPassword || !newPassword}
+              disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword}
               className="w-full bg-red-600 hover:bg-red-700 text-white rounded-2xl h-14 font-black text-xs uppercase tracking-widest shadow-xl shadow-red-500/20"
             >
               {isChangingPassword ? 'CONSOLIDATING...' : 'UPDATE SECURITY POOL'}
