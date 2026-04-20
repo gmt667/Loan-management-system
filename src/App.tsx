@@ -1868,6 +1868,26 @@ function App() {
     return localUser ? normalizeAuthProfile(localUser) : null;
   };
 
+  const markNotificationRead = React.useCallback(async (notification: NotificationRecord) => {
+    if (!notification.id || notification.isRead) return;
+    if (notification.id.startsWith('local-')) {
+      updateLocalNotificationRecord(notification.id, (existing) => ({ ...existing, isRead: true }));
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'notifications', notification.id), { isRead: true });
+    } catch (error) {
+      console.warn('Remote notification update failed. Falling back to local cache.', error);
+      saveLocalNotificationRecord({ ...notification, isRead: true });
+    }
+  }, []);
+
+  const markAllNotificationsRead = React.useCallback(async () => {
+    const unread = notifications.filter((notification) => !notification.isRead && notification.id);
+    await Promise.all(unread.map((notification) => markNotificationRead(notification)));
+  }, [markNotificationRead, notifications]);
+
   useEffect(() => {
     writeStoredLocalSessionProfile(localSessionProfile);
   }, [localSessionProfile]);
@@ -2201,7 +2221,11 @@ function App() {
         const activeLocal = localUsers.filter(lu => !firestoreIds.has(lu.id));
         return [...firestoreUsers, ...activeLocal];
       });
-    }, (error) => handleFirestoreError(error, OperationType.GET, 'users'));
+    }, (error) => {
+      console.warn('Users query blocked. Using local.');
+      setUsers(getLocalUsers());
+      handleFirestoreError(error, OperationType.GET, 'users');
+    });
 
     // System Settings Listener
     const unsubSettings = onSnapshot(doc(db, 'system_settings', 'global'), (docSnap) => {
@@ -2213,6 +2237,16 @@ function App() {
           currency: 'MWK', company_name: 'FastKwacha Ltd'
         }).catch(console.error);
       }
+    }, (error) => {
+      console.warn('System settings query blocked. Using in-memory defaults.', error);
+      setSystemSettings({
+        interest_rate_default: 15,
+        max_loan_duration: 12,
+        penalty_rate: 5,
+        penalty_grace_days: 3,
+        currency: 'MWK',
+        company_name: 'FastKwacha Ltd',
+      });
     });
 
     const qNotifications = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(50));
@@ -3943,10 +3977,7 @@ function App() {
                       {notifications.some(n => !n.isRead) && (
                         <button
                           className="text-[10px] font-bold text-slate-400 hover:text-white"
-                          onClick={async () => {
-                            const unread = notifications.filter(n => !n.isRead && n.id);
-                            await Promise.all(unread.map(n => updateDoc(doc(db, 'notifications', n.id!), { isRead: true })));
-                          }}
+                          onClick={markAllNotificationsRead}
                         >
                           Mark all read
                         </button>
@@ -3970,11 +4001,7 @@ function App() {
                         <div
                           key={n.id}
                           className={`px-4 py-3 hover:bg-slate-50 cursor-pointer transition-colors ${!n.isRead ? 'border-l-2 border-brand-500 bg-brand-50/30' : ''}`}
-                          onClick={async () => {
-                            if (!n.isRead && n.id) {
-                              await updateDoc(doc(db, 'notifications', n.id), { isRead: true });
-                            }
-                          }}
+                          onClick={() => markNotificationRead(n)}
                         >
                           <div className="flex items-start gap-3">
                             <span className="text-base mt-0.5">{icons[n.type] || 'ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬Â'}</span>
@@ -5466,33 +5493,33 @@ function ManagerHero({ activeLoans, totalDisbursed, outstanding, parRatio, nplCo
           <div className="flex flex-wrap gap-2">
             {activeTab === 'decision' ? (
               <>
-                <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={() => selectedApp && onApprove(selectedApp, selectedProductId, managerNote, false)} disabled={!canApprove}>
+                <Button type="button" size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold" onClick={() => selectedApp && onApprove(selectedApp, selectedProductId, managerNote, false)} disabled={!canApprove}>
                   <CheckCircle2 size={14} className="mr-2" /> Approve
                 </Button>
-                <Button size="sm" variant="outline" className="font-bold border-red-200 text-red-600" onClick={() => selectedApp && onReject(selectedApp, managerNote)} disabled={!canSubmitDecision}>
+                <Button type="button" size="sm" variant="outline" className="font-bold border-red-200 text-red-600" onClick={() => selectedApp && onReject(selectedApp, managerNote)} disabled={!canSubmitDecision}>
                   <AlertCircle size={14} className="mr-2" /> Reject
                 </Button>
-                <Button size="sm" variant="outline" className="font-bold" onClick={() => selectedApp && onSendBack(selectedApp, managerNote)} disabled={!canSubmitDecision}>
+                <Button type="button" size="sm" variant="outline" className="font-bold" onClick={() => selectedApp && onSendBack(selectedApp, managerNote)} disabled={!canSubmitDecision}>
                   <RefreshCw size={14} className="mr-2" /> Send Back
                 </Button>
-                <Button size="sm" variant="outline" className="font-bold border-amber-200 text-amber-700" onClick={() => selectedApp ? onApprove(selectedApp, selectedProductId, managerNote, true) : onRiskFilterToggle()} disabled={!canApprove}>
+                <Button type="button" size="sm" variant="outline" className="font-bold border-amber-200 text-amber-700" onClick={() => selectedApp ? onApprove(selectedApp, selectedProductId, managerNote, true) : onRiskFilterToggle()} disabled={!canApprove}>
                   <ShieldAlert size={14} className="mr-2" /> Override Risk
                 </Button>
               </>
             ) : activeTab === 'reports' ? (
               <>
-                <Button size="sm" className="bg-brand-600 font-bold" onClick={() => onNavigate('reports')}>
+                <Button type="button" size="sm" className="bg-brand-600 font-bold" onClick={() => onNavigate('reports')}>
                   <FileDown size={14} className="mr-2" /> Export CSV
                 </Button>
-                <Button size="sm" variant="outline" className="font-bold" onClick={() => onNavigate('reports')}>Export PDF</Button>
-                <Button size="sm" variant="outline" className="font-bold" onClick={() => onNavigate('reports')}>Export Excel</Button>
+                <Button type="button" size="sm" variant="outline" className="font-bold" onClick={() => onNavigate('reports')}>Export PDF</Button>
+                <Button type="button" size="sm" variant="outline" className="font-bold" onClick={() => onNavigate('reports')}>Export Excel</Button>
               </>
             ) : (
               <>
-                <Button size="sm" className="bg-brand-600 font-bold" onClick={() => onTabChange('decision')}>
+                <Button type="button" size="sm" className="bg-brand-600 font-bold" onClick={() => onTabChange('decision')}>
                   <Zap size={14} className="mr-2" /> Open Decision Queue
                 </Button>
-                <Button size="sm" variant="outline" className="font-bold" onClick={() => onNavigate('reports')}>
+                <Button type="button" size="sm" variant="outline" className="font-bold" onClick={() => onNavigate('reports')}>
                   <BarChart3 size={14} className="mr-2" /> Reports
                 </Button>
               </>
@@ -5606,7 +5633,7 @@ function ManagerDecisionTab({ queue, selectedApp, selectedProductId, setSelected
           {queue.length === 0 ? (
             <div className="p-6 text-sm text-slate-500 italic">No applications currently require manager intervention.</div>
           ) : queue.map((app: any) => (
-            <button key={app.id} onClick={() => setSelectedAppId(app.id)} className={`w-full text-left p-4 transition-colors ${selectedApp?.id === app.id ? 'bg-slate-900 text-white' : 'hover:bg-slate-50'}`}>
+            <button type="button" key={app.id} onClick={() => setSelectedAppId(app.id)} className={`w-full text-left p-4 transition-colors ${selectedApp?.id === app.id ? 'bg-slate-900 text-white' : 'hover:bg-slate-50'}`}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.2em] opacity-60">Loan {app.id.slice(0, 8).toUpperCase()}</p>
