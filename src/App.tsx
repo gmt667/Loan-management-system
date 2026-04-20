@@ -1316,6 +1316,22 @@ const verifyStoredPassword = async (storedHash: string | undefined, password: st
   return storedHash === await hashLocalPassword(password);
 };
 
+const getReadableAuthError = (error: any) => {
+  switch (error?.code) {
+    case 'auth/invalid-credential':
+    case 'auth/invalid-login-credentials':
+    case 'auth/user-not-found':
+    case 'auth/wrong-password':
+      return 'Invalid email or password.';
+    case 'auth/too-many-requests':
+      return 'Too many login attempts. Please wait a moment and try again.';
+    case 'auth/network-request-failed':
+      return 'Network error while contacting the sign-in service.';
+    default:
+      return error?.message || 'Unable to sign in.';
+  }
+};
+
 const saveLocalUser = (user: AuthProfile) => {
   const users = getLocalUsers();
   const existingIndex = users.findIndex(u => u.id === user.id || u.email === user.email);
@@ -1751,6 +1767,18 @@ function App() {
     return null;
   }, [predefinedRoleAccounts]);
 
+  const migrateLegacyLocalLogin = React.useCallback(async (normalizedEmail: string, rawPassword: string) => {
+    const localUser = getLocalUserByEmail(normalizedEmail);
+    if (!localUser || localUser.passwordHash) return null;
+    if (localUser.role !== 'CLIENT') return null;
+
+    await syncLocalPasswordRecord(localUser, rawPassword);
+    return normalizeAuthProfile({
+      ...localUser,
+      email: normalizedEmail,
+    });
+  }, [syncLocalPasswordRecord]);
+
   const fetchUserProfileByEmail = async (emailAddress: string) => {
     try {
       const q = query(collection(db, 'users'), where('email', '==', normalizeEmail(emailAddress)), limit(1));
@@ -1813,6 +1841,7 @@ function App() {
   }, []);
 
   const resetSessionState = React.useCallback(() => {
+    localSessionProfileRef.current = null;
     setUser(null);
     setAuthProfile(null);
     setLocalSessionProfile(null);
@@ -1835,9 +1864,11 @@ function App() {
   const activateSession = React.useCallback((profile: AuthProfile, authenticatedUser?: FirebaseUser | null, source: 'manual' | 'restore' = 'manual') => {
     setUser(authenticatedUser || null);
     if (authenticatedUser) {
+      localSessionProfileRef.current = null;
       setAuthProfile(profile);
       setLocalSessionProfile(null);
     } else {
+      localSessionProfileRef.current = profile;
       setAuthProfile(null);
       setLocalSessionProfile(profile);
     }
@@ -2605,7 +2636,14 @@ function App() {
       }
       activateSession(profile, credentials.user, 'manual');
     } catch (error: any) {
-      const message = error?.message || 'Invalid email or password.';
+      const migratedLegacyProfile = await migrateLegacyLocalLogin(normalizedEmail, password);
+      if (migratedLegacyProfile) {
+        activateSession(migratedLegacyProfile, null, 'manual');
+        toast.success('Local account credentials were refreshed. Please continue.');
+        return;
+      }
+
+      const message = getReadableAuthError(error);
       setLoginError(message);
       toast.error(`Login failed: ${message}`);
       return;
