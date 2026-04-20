@@ -119,6 +119,12 @@ export const managerSeed: LocalStorageSeed = {
       termMonths: 6,
       monthlyIncome: 180000,
       analystRecommendation: 'APPROVE',
+      analysis: {
+        decision: 'RECOMMEND_APPROVE',
+        reasons: ['Strong income'],
+        comment: 'Stable income, moderate risk',
+        analystName: 'Credit Analyst',
+      },
       comment: 'Stable income, moderate risk',
       crb: {
         score: 580,
@@ -225,11 +231,11 @@ export async function loginAs(page: Page, email: string, password: string, seed?
   await openFreshApp(page, seed);
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);
-  await page.getByRole('button', { name: /authorize access/i }).click();
+  await page.getByRole('button', { name: /authorize access|sign in/i }).click();
 }
 
 export async function expectHeading(page: Page, pattern: RegExp) {
-  await expect(page.getByText(pattern).first()).toBeVisible({ timeout: 20000 });
+  await expect(page.getByRole('heading', { name: pattern }).first()).toBeVisible({ timeout: 20000 });
 }
 
 export async function openSidebarModule(page: Page, label: string) {

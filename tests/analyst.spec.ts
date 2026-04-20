@@ -3,12 +3,10 @@ import { ANALYST_TEST_CLIENT, analystSeed, loginAs } from './test-helpers';
 
 async function openAnalystQueue(page: import('@playwright/test').Page) {
   await loginAs(page, 'analyst@fastkwacha.com', 'analyst123', analystSeed);
-  await expect(page.getByText(/Risk Pipeline|Analyst Console/i).first()).toBeVisible({ timeout: 20000 });
-  await page.getByTestId('tab-QUEUE').click();
-  await expect(page.getByText(/Analyst Queue \(/i)).toBeVisible({ timeout: 15000 });
-  const applicantRow = page.getByTestId('queue-item').first();
+  await expect(page.getByRole('heading', { name: /Risk Assessment Terminal|Risk Pipeline|Analyst Console/i }).first()).toBeVisible({ timeout: 20000 });
+  await page.getByRole('button', { name: /work queue/i }).click();
+  const applicantRow = page.getByText(new RegExp(ANALYST_TEST_CLIENT, 'i')).first();
   await expect(applicantRow).toBeVisible({ timeout: 10000 });
-  await expect(applicantRow).toContainText(new RegExp(ANALYST_TEST_CLIENT, 'i'));
   await applicantRow.click();
 }
 
@@ -27,62 +25,44 @@ test.describe('Credit Analyst E2E Flow', () => {
     await loginAs(page, 'analyst@fastkwacha.com', 'analyst123', analystSeed);
 
     // 2. Wait for Analyst Console
-    await expect(page.getByText(/Risk Pipeline|Analyst Console/i).first()).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('heading', { name: /Risk Assessment Terminal|Risk Pipeline|Analyst Console/i }).first()).toBeVisible({ timeout: 20000 });
 
     // 3. Navigate to Analysis Queue
     console.log('Attempting to switch to QUEUE tab...');
-    const queueTab = page.getByTestId('tab-QUEUE');
+    const queueTab = page.getByRole('button', { name: /work queue/i });
     
     // Try regular click
     await queueTab.click();
     
     // Check if it switched. If not, try forced click or evaluate
     try {
-      await expect(page.getByText(/Analyst Queue \(/i)).toBeVisible({ timeout: 5000 });
+      await expect(page.getByText(new RegExp(ANALYST_TEST_CLIENT, 'i')).first()).toBeVisible({ timeout: 5000 });
     } catch (e) {
       console.log('Regular click failed to switch tab, trying forced click...');
       await queueTab.click({ force: true });
       try {
-        await expect(page.getByText(/Analyst Queue \(/i)).toBeVisible({ timeout: 5000 });
+        await expect(page.getByText(new RegExp(ANALYST_TEST_CLIENT, 'i')).first()).toBeVisible({ timeout: 5000 });
       } catch (e2) {
-        console.log('Forced click failed, using evaluate...');
-        await page.evaluate(() => {
-          const btn = document.querySelector('[data-testid="tab-QUEUE"]') as HTMLButtonElement;
-          if (btn) btn.click();
-        });
+        throw e2;
       }
     }
 
-    // Wait for the heading to appear
-    await expect(page.getByText(/Analyst Queue \(/i)).toBeVisible({ timeout: 15000 });
-
     // 4. Verify Applicant
-    const applicantRow = page.getByTestId('queue-item').first();
-    await applicantRow.waitFor({ state: 'attached', timeout: 10000 });
+    const applicantRow = page.getByText(new RegExp(ANALYST_TEST_CLIENT, 'i')).first();
     await expect(applicantRow).toBeVisible({ timeout: 10000 });
-    await expect(applicantRow).toContainText(new RegExp(ANALYST_TEST_CLIENT, 'i'));
     await applicantRow.click();
 
-    // 5. Manual CRB Flow
-    await page.getByRole('button', { name: /MANUAL CRB/i }).click();
-    const scoreInput = page.locator('input[type="number"]').first();
-    await expect(scoreInput).toBeVisible();
-    await scoreInput.fill('710');
-    // The button text in App.tsx is "Commit to Immutable Audit"
-    await page.getByRole('button', { name: /commit/i }).click();
-
-    // 6. Referral Flow
-    await page.getByRole('button', { name: /refer back/i }).first().click();
+    // 5. Referral Flow
+    await page.getByRole('button', { name: /^refer back$/i }).click();
     const textarea = page.locator('textarea');
     await expect(textarea).toBeVisible();
     await textarea.fill('Needs secondary proof of income (Programmatic Test V14)');
-    await page.getByRole('button', { name: /income clarification required/i }).click();
-    await page.getByRole('button', { name: /confirm decision/i }).click();
+    await page.getByRole('button', { name: /need clarification/i }).click();
+    await page.getByRole('button', { name: /commit recommendation to manager/i }).click();
 
-    // 7. History Check
-    console.log('Switching to HISTORY tab...');
-    await page.getByTestId('tab-HISTORY').click({ force: true });
-    await expect(page.getByText(/Programmatic Test V14|Manual CRB/i).first()).toBeVisible({ timeout: 15000 });
+    // 6. Confirm handoff from the analyst queue in local state
+    const applicationState = await page.evaluate(() => JSON.parse(window.localStorage.getItem('fastkwacha_local_apps') || '[]'));
+    expect(applicationState.find((app: any) => app.id === 'analyst-app-1')?.current_stage).toBe('REFERRED_BACK');
     
     console.log('E2E Test Finalized Successfully!');
   });
@@ -90,21 +70,24 @@ test.describe('Credit Analyst E2E Flow', () => {
   test('Complete Analysis advances the analyst case without errors', async ({ page }) => {
     await openAnalystQueue(page);
 
-    await page.getByRole('button', { name: /complete analysis/i }).click();
-    await page.getByRole('button', { name: /strong income stability/i }).click();
-    await page.getByRole('button', { name: /confirm decision/i }).click();
+    await page.getByRole('button', { name: /^approve$/i }).click();
+    await page.getByRole('button', { name: /strong income/i }).click();
+    await page.locator('textarea').fill('Strong income stability and acceptable bureau profile for escalation to manager.');
+    await page.getByRole('button', { name: /commit recommendation to manager/i }).click();
 
-    await expect(page.getByText(/No applications in analysis\./i)).toBeVisible({ timeout: 15000 });
+    const applicationState = await page.evaluate(() => JSON.parse(window.localStorage.getItem('fastkwacha_local_apps') || '[]'));
+    expect(applicationState.find((app: any) => app.id === 'analyst-app-1')?.current_stage).toBe('ANALYZED');
   });
 
   test('Recommend Rejection removes the analyst case without errors', async ({ page }) => {
     await openAnalystQueue(page);
 
-    await page.getByRole('button', { name: /recommend rejection/i }).click();
+    await page.getByRole('button', { name: /^reject$/i }).click();
     await page.getByRole('button', { name: /insufficient income/i }).click();
-    await page.locator('textarea').last().fill('Income evidence is insufficient for this requested amount.');
-    await page.getByRole('button', { name: /confirm decision/i }).click();
+    await page.locator('textarea').fill('Income evidence is insufficient for this requested amount.');
+    await page.getByRole('button', { name: /commit recommendation to manager/i }).click();
 
-    await expect(page.getByText(/No applications in analysis\./i)).toBeVisible({ timeout: 15000 });
+    const applicationState = await page.evaluate(() => JSON.parse(window.localStorage.getItem('fastkwacha_local_apps') || '[]'));
+    expect(applicationState.find((app: any) => app.id === 'analyst-app-1')?.current_stage).toBe('ANALYZED');
   });
 });

@@ -50,11 +50,26 @@ import {
   X,
   BellRing,
   EyeOff,
+  Eye,
+  FileCheck,
   Menu,
   Activity,
   Wallet,
   Target,
-  Award
+  Award,
+  Terminal,
+  MapPin,
+  Calendar,
+  Maximize2,
+  Sparkles,
+  Box,
+  BarChart4,
+  FileX2,
+  Download,
+  Printer,
+  Lock,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -84,17 +99,22 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useTheme as useNextTheme } from 'next-themes';
+import { AuthProvider, type AppPath } from './auth/AuthContext';
+import ProtectedRoute from './auth/ProtectedRoute';
 
 // Firebase
-import { auth, db, googleProvider, storage } from './lib/firebase';
+import { auth, db, storage } from './lib/firebase';
 import { 
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
+  signInWithPopup,
   signOut,
   User as FirebaseUser,
   createUserWithEmailAndPassword,
-  signInWithPopup,
-  GoogleAuthProvider
+  GoogleAuthProvider,
+  updatePassword,
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from 'firebase/auth';
 import { 
   ref, 
@@ -958,10 +978,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 // Types
-type UserRole = 'ADMIN' | 'OFFICER' | 'CREDIT_ANALYST' | 'MANAGER' | 'CLIENT';
+type UserRole = 'ADMIN' | 'OFFICER' | 'AGENT' | 'CREDIT_ANALYST' | 'MANAGER' | 'CLIENT';
 type UserStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED';
-type LoanStage = 'SUBMITTED' | 'UNDER_REVIEW' | 'CRB_CHECK' | 'ANALYSIS' | 'FINAL_DECISION' | 'APPROVED' | 'DISBURSED';
-type View = 'dashboard' | 'users' | 'clients' | 'loan-products' | 'loans' | 'transactions' | 'reports' | 'audit-logs' | 'automation-center' | 'applications' | 'approvals' | 'repayments' | 'transactions-audit' | 'anomalies' | 'user-activity' | 'cases' | 'payments' | 'due-loans' | 'settings' | 'repayment-audit';
+type LoanStage = 'PENDING' | 'REVIEWED' | 'ANALYZED' | 'REFERRED_BACK' | 'APPROVED' | 'REJECTED' | 'DISBURSED' | 'SUBMITTED' | 'UNDER_REVIEW' | 'CRB_CHECK' | 'ANALYSIS' | 'FINAL_DECISION';
+type View = 'dashboard' | 'users' | 'clients' | 'loan-products' | 'loans' | 'transactions' | 'reports' | 'audit-logs' | 'automation-center' | 'applications' | 'approvals' | 'repayments' | 'transactions-audit' | 'anomalies' | 'user-activity' | 'cases' | 'payments' | 'due-loans' | 'settings' | 'repayment-audit' | 'manager-decision' | 'manager-portfolio' | 'manager-risk' | 'profile' | 'receipts' | 'notifications';
 
 type TransactionType = 'DISBURSEMENT' | 'REPAYMENT' | 'CHARGE' | 'PENALTY' | 'ADJUSTMENT';
 type ScheduleStatus = 'PENDING' | 'PAID' | 'PARTIAL' | 'OVERDUE';
@@ -976,6 +996,8 @@ interface NotificationRecord {
   message: string;
   loanId?: string;
   applicationId?: string;
+  clientId?: string;
+  targetEmail?: string;
   targetRole?: UserRole | 'ALL';
   isRead: boolean;
   createdAt: any;
@@ -1032,11 +1054,14 @@ interface AuthProfile {
   name: string;
   email: string;
   phone?: string;
+  idNumber?: string;
   nationalId?: string;
   address?: string;
   role: UserRole;
   status: UserStatus;
+  kycStatus?: string;
   profilePhotoName?: string;
+  photoURL?: string;
   guarantorReference?: string;
   kycComplete?: boolean;
   createdAt?: any;
@@ -1132,8 +1157,115 @@ const getStatusTone = (status: UserStatus) => {
 };
 
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
+const normalizeUserRole = (role?: string): UserRole => {
+  switch (String(role || 'CLIENT').toUpperCase()) {
+    case 'LOAN_OFFICER':
+    case 'OFFICER':
+      return 'OFFICER';
+    case 'AGENT':
+      return 'AGENT';
+    case 'CREDIT_ANALYST':
+      return 'CREDIT_ANALYST';
+    case 'MANAGER':
+      return 'MANAGER';
+    case 'ADMIN':
+      return 'ADMIN';
+    default:
+      return 'CLIENT';
+  }
+};
 const normalizeUserStatus = (status?: string): UserStatus =>
-  status === 'INACTIVE' ? 'SUSPENDED' : ((status as UserStatus) || 'ACTIVE');
+  status === 'INACTIVE' || status === 'DISABLED' ? 'SUSPENDED' : ((status as UserStatus) || 'ACTIVE');
+
+const normalizeAppPath = (path?: string): AppPath => {
+  switch (path) {
+    case '/client':
+    case '/officer':
+    case '/analyst':
+    case '/manager':
+    case '/admin':
+    case '/unauthorized':
+      return path;
+    default:
+      return '/login';
+  }
+};
+
+const getPathForRole = (role?: UserRole | null): AppPath => {
+  switch (role) {
+    case 'CLIENT':
+      return '/client';
+    case 'OFFICER':
+    case 'AGENT':
+      return '/officer';
+    case 'CREDIT_ANALYST':
+      return '/analyst';
+    case 'MANAGER':
+      return '/manager';
+    case 'ADMIN':
+      return '/admin';
+    default:
+      return '/login';
+  }
+};
+
+const normalizeApplicationStage = (stage?: string, status?: string): LoanStage => {
+  const normalized = String(stage || status || 'PENDING').toUpperCase();
+
+  switch (normalized) {
+    case 'SUBMITTED':
+    case 'PENDING':
+      return 'PENDING';
+    case 'UNDER_REVIEW':
+    case 'CRB_CHECK':
+    case 'REVIEWED':
+      return 'REVIEWED';
+    case 'ANALYSIS':
+    case 'FINAL_DECISION':
+    case 'ANALYZED':
+      return 'ANALYZED';
+    case 'REFERRED_BACK':
+      return 'REFERRED_BACK';
+    case 'APPROVED':
+      return 'APPROVED';
+    case 'REJECTED':
+      return 'REJECTED';
+    case 'DISBURSED':
+      return 'DISBURSED';
+    default:
+      return 'PENDING';
+  }
+};
+
+const normalizeApplicationRecord = (application: any) => {
+  const currentStage = normalizeApplicationStage(application?.current_stage, application?.status);
+  return {
+    ...application,
+    current_stage: currentStage,
+    status: currentStage === 'DISBURSED' ? 'APPROVED' : currentStage,
+  };
+};
+
+const getDefaultViewForRole = (profile?: AuthProfile | null): View => {
+  if (!profile) return 'dashboard';
+  if (profile.role === 'CLIENT') {
+    return profile.kycComplete ? 'dashboard' : 'profile';
+  }
+  return 'dashboard';
+};
+
+const isViewAllowedForRole = (role: UserRole, view: View) => {
+  const allowedViewsByRole: Record<UserRole, View[]> = {
+    CLIENT: ['dashboard', 'loans', 'repayments', 'receipts', 'notifications', 'profile', 'settings'],
+    OFFICER: ['dashboard', 'applications', 'approvals', 'clients', 'loans', 'payments', 'repayments', 'transactions', 'due-loans', 'reports', 'settings'],
+    AGENT: ['dashboard', 'clients', 'due-loans', 'transactions', 'payments', 'settings'],
+    CREDIT_ANALYST: ['dashboard', 'audit-logs', 'repayment-audit', 'transactions-audit', 'anomalies', 'reports', 'user-activity', 'cases', 'settings'],
+    MANAGER: ['dashboard', 'manager-decision', 'manager-portfolio', 'manager-risk', 'reports', 'audit-logs', 'automation-center', 'settings', 'repayments'],
+    ADMIN: ['dashboard', 'users', 'clients', 'loan-products', 'loans', 'transactions', 'reports', 'audit-logs', 'automation-center', 'applications', 'approvals', 'repayments', 'transactions-audit', 'anomalies', 'user-activity', 'cases', 'payments', 'due-loans', 'settings', 'repayment-audit'],
+  };
+
+  return allowedViewsByRole[role]?.includes(view) ?? false;
+};
 
 const LOCAL_USERS_KEY = 'fastkwacha_local_users';
 const LOCAL_CLIENTS_KEY = 'fastkwacha_local_clients';
@@ -1355,8 +1487,53 @@ const writeStoredLocalSessionProfile = (profile: AuthProfile | null) => {
   }
 };
 
+const normalizeAuthProfile = (profile: Partial<AuthProfile> & { id: string; uid?: string; email: string; name?: string }) => ({
+  ...profile,
+  id: profile.id,
+  uid: profile.uid || profile.id,
+  email: normalizeEmail(profile.email),
+  name: profile.name || 'FastKwacha User',
+  role: normalizeUserRole(profile.role),
+  status: normalizeUserStatus(profile.status),
+  kycComplete: Boolean(profile.kycComplete),
+  kycStatus: profile.kycStatus || (profile.kycComplete ? 'COMPLETE' : 'INCOMPLETE'),
+} as AuthProfile);
+
 const getActiveSessionEmail = (profile?: AuthProfile | null) =>
   normalizeEmail(profile?.email || auth.currentUser?.email || readStoredLocalSessionProfile()?.email || '');
+
+const isLocalApplicationId = (applicationId?: string) => {
+  if (!applicationId) return false;
+  return applicationId.startsWith('local-app-')
+    || applicationId.startsWith('demo-')
+    || getLocalApplications().some((application) => application.id === applicationId);
+};
+
+function Switch({
+  checked,
+  onCheckedChange,
+}: {
+  checked: boolean;
+  onCheckedChange: (nextValue: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onCheckedChange(!checked)}
+      className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors ${
+        checked ? 'border-brand-600 bg-brand-600' : 'border-slate-200 bg-slate-200'
+      }`}
+    >
+      <span
+        className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+          checked ? 'translate-x-5' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
+  );
+}
 
 const downloadCSV = (data: any[], filename: string) => {
   if (data.length === 0) {
@@ -1408,6 +1585,16 @@ const hashStringToInt = (str: string, range: number = 550, offset: number = 300)
   return Math.abs(hash % range) + offset;
 };
 
+export const calculateSLA = (application: any) => {
+  const createdAt = application.createdAt?.toDate ? application.createdAt.toDate() : new Date(application.createdAt || Date.now());
+  const now = new Date();
+  const hoursElapsed = Math.max(0, (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60));
+  
+  if (hoursElapsed > 24) return { status: 'VIOLATED', color: 'text-red-600', bg: 'bg-red-50', text: 'SLA BREACHED', hours: hoursElapsed };
+  if (hoursElapsed > 18) return { status: 'WARNING', color: 'text-amber-600', bg: 'bg-amber-50', text: 'SLA RISK', hours: hoursElapsed };
+  return { status: 'ON TRACK', color: 'text-emerald-600', bg: 'bg-emerald-50', text: 'ON TRACK', hours: hoursElapsed };
+};
+
 export default function AppWrapper() {
   return (
     <ErrorBoundary>
@@ -1422,6 +1609,8 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [currentPath, setCurrentPath] = useState<AppPath>(() => normalizeAppPath(typeof window === 'undefined' ? '/login' : window.location.pathname));
   const [role, setRole] = useState<UserRole>('CLIENT');
   const [authProfile, setAuthProfile] = useState<AuthProfile | null>(null);
   const [localSessionProfile, setLocalSessionProfile] = useState<AuthProfile | null>(() => readStoredLocalSessionProfile());
@@ -1452,9 +1641,19 @@ function App() {
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [pendingEmailPrompt, setPendingEmailPrompt] = useState<string | null>(null);
   const [loginAttempts, setLoginAttempts] = useState({ count: 0, lockedUntil: 0 });
+  const [managerNote, setManagerNote] = useState('');
+  const [clientSettings, setClientSettings] = useState({
+    notifications: true,
+    marketing: true,
+    twoFactor: false,
+    displayMode: 'system' as 'light' | 'dark' | 'system'
+  });
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [registrationData, setRegistrationData] = useState({
     fullName: '',
@@ -1469,16 +1668,20 @@ function App() {
   const [registrationFiles, setRegistrationFiles] = useState<{ profilePhoto: File | null }>({ profilePhoto: null });
   const [isRegistering, setIsRegistering] = useState(false);
   const registrationHydrationRef = React.useRef<string | null>(null);
+  const registrationDraftRef = React.useRef(registrationData);
+  const localSessionProfileRef = React.useRef<AuthProfile | null>(localSessionProfile);
+  const isLoggingOutRef = React.useRef(false);
+  const welcomedUserRef = React.useRef<string | null>(null);
   const [showRegistrationSuccessPanel, setShowRegistrationSuccessPanel] = useState(false);
   const sessionProfile = authProfile || localSessionProfile;
   const isPendingStaff = sessionProfile?.role === 'OFFICER' && sessionProfile.status === 'PENDING';
-  const isPendingAgent = sessionProfile?.role === 'AGENT' && sessionProfile.status === 'PENDING';
 
   const predefinedRoleAccounts: Record<string, { role: UserRole; password: string; name: string }> = {
     'admin@fastkwacha.com': { role: 'ADMIN', password: 'admin123', name: 'System Admin' },
     'officer@fastkwacha.com': { role: 'OFFICER', password: 'officer123', name: 'Loan Officer' },
-    'analyst@fastkwacha.com': { role: 'CREDIT_ANALYST', password: 'analyst123', name: 'Credit Analyst' },
+    'agent.test@fastkwacha.com': { role: 'AGENT', password: 'agent123', name: 'Field Agent' },
     'manager@fastkwacha.com': { role: 'MANAGER', password: 'manager123', name: 'Operations Manager' },
+    'analyst@fastkwacha.com': { role: 'CREDIT_ANALYST', password: 'analyst123', name: 'Credit Analyst' },
   };
 
   const fetchUserProfileByEmail = async (emailAddress: string) => {
@@ -1488,7 +1691,7 @@ function App() {
       if (!snapshot.empty) {
         const profileDoc = snapshot.docs[0];
         const data = profileDoc.data() as any;
-        return { id: profileDoc.id, ...data, status: normalizeUserStatus(data.status) } as AuthProfile;
+        return normalizeAuthProfile({ id: profileDoc.id, ...data });
       }
     } catch (error: any) {
       if (error.code === 'permission-denied' || error.message?.includes('permission')) {
@@ -1501,7 +1704,24 @@ function App() {
     // Fallback: Check local storage
     const locals = getLocalUsers();
     const localUser = locals.find(u => normalizeEmail(u.email) === normalizeEmail(emailAddress));
-    return localUser || null;
+    return localUser ? normalizeAuthProfile(localUser) : null;
+  };
+
+  const fetchUserProfileByPhone = async (phoneNumber: string) => {
+    try {
+      const q = query(collection(db, 'users'), where('phone', '==', phoneNumber.trim()), limit(1));
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        const profileDoc = snapshot.docs[0];
+        const data = profileDoc.data() as any;
+        return normalizeAuthProfile({ id: profileDoc.id, ...data });
+      }
+    } catch (error) {
+       console.warn('fetchUserProfileByPhone blocked by permissions. Checking local storage.');
+    }
+    const locals = getLocalUsers();
+    const localUser = locals.find(u => u.phone === phoneNumber.trim());
+    return localUser ? normalizeAuthProfile(localUser) : null;
   };
 
   useEffect(() => {
@@ -1509,58 +1729,222 @@ function App() {
   }, [localSessionProfile]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (authenticatedUser) => {
-      setUser(authenticatedUser);
-      if (authenticatedUser) {
-        try {
-          let profileSnap = await getDoc(doc(db, 'users', authenticatedUser.uid));
-          let profile: AuthProfile | null = null;
+    localSessionProfileRef.current = localSessionProfile;
+  }, [localSessionProfile]);
 
-          if (profileSnap.exists()) {
-            const data = profileSnap.data() as any;
-            profile = { id: profileSnap.id, ...data, status: normalizeUserStatus(data.status) };
-          } else if (authenticatedUser.email) {
-            profile = await fetchUserProfileByEmail(authenticatedUser.email);
-            if (profile && profile.id !== authenticatedUser.uid) {
-              await setDoc(doc(db, 'users', authenticatedUser.uid), {
-                ...profile,
-                uid: authenticatedUser.uid,
-                email: normalizeEmail(profile.email),
-                migratedFromId: profile.id,
-                updatedAt: serverTimestamp(),
-              }, { merge: true });
-              profile = { ...profile, id: authenticatedUser.uid, uid: authenticatedUser.uid };
-            }
-          }
+  useEffect(() => {
+    registrationDraftRef.current = registrationData;
+  }, [registrationData]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(normalizeAppPath(window.location.pathname));
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const resetSessionState = React.useCallback(() => {
+    setUser(null);
+    setAuthProfile(null);
+    setLocalSessionProfile(null);
+    setIsAuthenticated(false);
+    setRole('CLIENT');
+    setCurrentView('dashboard');
+    setCurrentPath('/login');
+    welcomedUserRef.current = null;
+  }, []);
+
+  const navigateTo = React.useCallback((path: AppPath, options?: { replace?: boolean }) => {
+    const nextPath = normalizeAppPath(path);
+    if (typeof window !== 'undefined' && window.location.pathname !== nextPath) {
+      const method = options?.replace ? 'replaceState' : 'pushState';
+      window.history[method](null, '', nextPath);
+    }
+    setCurrentPath(nextPath);
+  }, []);
+
+  const activateSession = React.useCallback((profile: AuthProfile, authenticatedUser?: FirebaseUser | null, source: 'manual' | 'restore' = 'manual') => {
+    setUser(authenticatedUser || null);
+    if (authenticatedUser) {
+      setAuthProfile(profile);
+      setLocalSessionProfile(null);
+    } else {
+      setAuthProfile(null);
+      setLocalSessionProfile(profile);
+    }
+    setRole(profile.role);
+    setCurrentView(getDefaultViewForRole(profile));
+    navigateTo(getPathForRole(profile.role), { replace: true });
+    setIsAuthenticated(true);
+
+    const sessionKey = authenticatedUser?.uid || profile.uid || profile.id;
+    if (source === 'manual' && welcomedUserRef.current !== sessionKey) {
+      toast.success(`Welcome back, ${profile.name || authenticatedUser?.displayName || 'User'} (${profile.role})`);
+      welcomedUserRef.current = sessionKey;
+    }
+  }, [navigateTo]);
+
+  const resolveAuthProfile = React.useCallback(async (authenticatedUser: FirebaseUser): Promise<AuthProfile | null> => {
+    const signedInWithGoogle = authenticatedUser.providerData.some(provider => provider.providerId === 'google.com');
+    let profileSnap = await getDoc(doc(db, 'users', authenticatedUser.uid));
+    let profile: AuthProfile | null = null;
+
+    if (profileSnap.exists()) {
+      const data = profileSnap.data() as any;
+      profile = normalizeAuthProfile({ id: profileSnap.id, ...data });
+    } else if (authenticatedUser.email) {
+      profile = await fetchUserProfileByEmail(authenticatedUser.email);
+      if (profile && profile.id !== authenticatedUser.uid) {
+        await setDoc(doc(db, 'users', authenticatedUser.uid), {
+          ...profile,
+          uid: authenticatedUser.uid,
+          email: normalizeEmail(profile.email),
+          migratedFromId: profile.id,
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+        profile = normalizeAuthProfile({ ...profile, id: authenticatedUser.uid, uid: authenticatedUser.uid });
+      }
+    }
+
+    if (!profile && authenticatedUser.email && signedInWithGoogle) {
+      const generatedProfile = normalizeAuthProfile({
+        id: authenticatedUser.uid,
+        uid: authenticatedUser.uid,
+        email: authenticatedUser.email,
+        name: authenticatedUser.displayName || authenticatedUser.email.split('@')[0],
+        role: 'CLIENT',
+        status: 'ACTIVE',
+        kycComplete: false,
+        kycStatus: 'INCOMPLETE',
+        photoURL: authenticatedUser.photoURL || undefined,
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+      });
+      registrationHydrationRef.current = authenticatedUser.uid;
+      await setDoc(doc(db, 'users', authenticatedUser.uid), {
+        ...generatedProfile,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        lastLogin: serverTimestamp(),
+      }, { merge: true });
+      profile = generatedProfile;
+    }
+
+    if (!profile && authenticatedUser.email && registrationHydrationRef.current === authenticatedUser.uid) {
+      const registrationDraft = registrationDraftRef.current;
+      const generatedProfile = normalizeAuthProfile({
+        id: authenticatedUser.uid,
+        uid: authenticatedUser.uid,
+        email: authenticatedUser.email,
+        name: registrationDraft.fullName.trim() || authenticatedUser.displayName || authenticatedUser.email.split('@')[0],
+        phone: registrationDraft.phone.trim() || undefined,
+        nationalId: registrationDraft.nationalId.trim() || undefined,
+        address: registrationDraft.address.trim() || undefined,
+        role: 'CLIENT',
+        status: 'ACTIVE',
+        kycComplete: false,
+        kycStatus: 'INCOMPLETE',
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+      });
+      await setDoc(doc(db, 'users', authenticatedUser.uid), {
+        ...generatedProfile,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        lastLogin: serverTimestamp(),
+      }, { merge: true });
+      profile = generatedProfile;
+    }
+
+    if (signedInWithGoogle && profile?.role !== 'CLIENT') {
+      throw new Error('Google sign-in is available for client accounts only.');
+    }
+
+    return profile;
+  }, [fetchUserProfileByEmail]);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (authenticatedUser) => {
+      if (authenticatedUser) {
+        if (!isAuthenticated) {
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const profile = await resolveAuthProfile(authenticatedUser);
 
           if (!profile) {
-            if (registrationHydrationRef.current === authenticatedUser.uid) {
-              return;
-            }
             await signOut(auth);
-            toast.error('No access profile was found for this account.');
+            resetSessionState();
+            if (!isLoggingOutRef.current) {
+              toast.error('No access profile was found for this account.');
+            }
           } else {
-            setAuthProfile(profile);
-            setRole(profile.role);
-            toast.success(`Welcome back, ${profile.name || authenticatedUser.displayName || 'User'} (${profile.role})`);
+            isLoggingOutRef.current = false;
+            activateSession(profile, authenticatedUser, 'restore');
+            registrationHydrationRef.current = null;
             testConnection();
           }
         } catch (error) {
           console.error('Failed to load user profile', error);
-          toast.error('Unable to load your access profile.');
+          resetSessionState();
+          if (auth.currentUser) {
+            try {
+              await signOut(auth);
+            } catch (signOutError) {
+              console.error('Failed to sign out after auth profile error', signOutError);
+            }
+          }
+          if (!isLoggingOutRef.current) {
+            toast.error('Unable to load your access profile.');
+          }
         }
       } else {
-        if (!localSessionProfile) {
+        if (!localSessionProfileRef.current) {
           setAuthProfile(null);
         }
+        setUser(null);
+        setRole(localSessionProfileRef.current?.role || 'CLIENT');
+        if (!localSessionProfileRef.current) {
+          setCurrentView('dashboard');
+          welcomedUserRef.current = null;
+        }
+        isLoggingOutRef.current = false;
       }
       setLoading(false);
     });
     return () => unsubscribe();
-  }, [localSessionProfile]);
+  }, [activateSession, isAuthenticated, resetSessionState, resolveAuthProfile]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !sessionProfile) return;
+
+    const expectedView = getDefaultViewForRole(sessionProfile);
+    const shouldRedirectForKyc = sessionProfile.role === 'CLIENT' && !sessionProfile.kycComplete && currentView === 'dashboard';
+
+    if (!isViewAllowedForRole(role, currentView) || shouldRedirectForKyc) {
+      setCurrentView(expectedView);
+    }
+  }, [isAuthenticated, sessionProfile?.id, sessionProfile?.role, sessionProfile?.kycComplete, currentView, role]);
+
+  useEffect(() => {
+    if (!isAuthenticated && currentPath !== '/login') {
+      navigateTo('/login', { replace: true });
+    }
+  }, [currentPath, isAuthenticated, navigateTo]);
+
+  useEffect(() => {
+    if (isAuthenticated && sessionProfile && currentPath === '/login') {
+      navigateTo(getPathForRole(sessionProfile.role), { replace: true });
+    }
+  }, [currentPath, isAuthenticated, navigateTo, sessionProfile]);
 
   // Unified Data Synchronization
   useEffect(() => {
+    if (!isAuthenticated) return;
     if (!user && !localSessionProfile) return;
 
     setUsers(prev => syncItemsWithLocal(prev, getLocalUsers()));
@@ -1601,19 +1985,19 @@ function App() {
     // Applications Listener
     const qApps = query(collection(db, 'applications'), orderBy('createdAt', 'desc'), limit(50));
     const unsubApps = onSnapshot(qApps, (snapshot) => {
-      const firestoreApps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const firestoreApps = snapshot.docs.map(doc => normalizeApplicationRecord({ id: doc.id, ...doc.data() }));
       console.log('[DEBUG] Firestore apps received:', firestoreApps.length);
       setApplications(prev => {
         const localApps = getLocalApplications();
         const firestoreIds = new Set(firestoreApps.map(a => a.id));
-        const activeLocal = localApps.filter(la => !firestoreIds.has(la.id));
+        const activeLocal = localApps.filter(la => !firestoreIds.has(la.id)).map(normalizeApplicationRecord);
         const combined = [...firestoreApps, ...activeLocal];
         console.log('[DEBUG] Combined apps count:', combined.length);
         return combined;
       });
     }, (error) => {
       console.warn("Firestore apps query blocked. Using local.", error);
-      const locals = getLocalApplications();
+      const locals = getLocalApplications().map(normalizeApplicationRecord);
       console.log('[DEBUG] Error fallback apps count:', locals.length);
       setApplications(locals);
     });
@@ -1710,25 +2094,26 @@ function App() {
       window.removeEventListener(LOCAL_DATA_UPDATED_EVENT, handleLocalDataUpdated);
       unsubClients(); unsubLoans(); unsubApps(); unsubTrans(); unsubProducts(); unsubSchedule(); unsubWorkflow(); unsubUsers(); unsubSettings(); unsubNotifications(); unsubReceipts();
     };
-  }, [user, localSessionProfile]);
+  }, [isAuthenticated, user, localSessionProfile]);
 
   // Phase 5: Daily automation on login (runs once per 24h)
   useEffect(() => {
-    if (!sessionProfile) return;
+    if (!isAuthenticated || !sessionProfile) return;
     if (loans.length === 0) return;
     runDailyAutomation(loans, loanProducts);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionProfile?.id, loans.length]);
+  }, [isAuthenticated, sessionProfile?.id, loans.length]);
 
   // Profile Specific Listener
   useEffect(() => {
+    if (!isAuthenticated) return;
     const profileId = authProfile?.id || localSessionProfile?.id;
     if (!profileId) return;
 
     const unsubProfile = onSnapshot(doc(db, 'users', profileId), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data() as any;
-        const updatedProfile = { id: docSnap.id, ...data, status: normalizeUserStatus(data.status) } as AuthProfile;
+        const updatedProfile = normalizeAuthProfile({ id: docSnap.id, ...data });
         if (authProfile) setAuthProfile(updatedProfile);
         else if (localSessionProfile) {
           if (updatedProfile.status !== localSessionProfile.status || updatedProfile.role !== localSessionProfile.role) {
@@ -1738,10 +2123,11 @@ function App() {
       }
     });
     return () => unsubProfile();
-  }, [authProfile?.id, localSessionProfile?.id]);
+  }, [isAuthenticated, authProfile?.id, localSessionProfile?.id]);
 
   // Auto-Logout & Session Sync
   useEffect(() => {
+    if (!isAuthenticated) return;
     if (!user && !localSessionProfile) return;
 
     const syncInterval = setInterval(() => {
@@ -1773,7 +2159,7 @@ function App() {
       window.removeEventListener('mousemove', resetTimer);
       window.removeEventListener('keypress', resetTimer);
     };
-  }, [user, localSessionProfile]);
+  }, [isAuthenticated, user, localSessionProfile]);
 
   const runWorkflowMigration = async () => {
     toast.loading("Starting workflow migration...");
@@ -1783,14 +2169,11 @@ function App() {
       const snapshot = await getDocs(collection(db, 'applications'));
       for (const applicationDoc of snapshot.docs) {
         const data = applicationDoc.data();
-        if (!data.current_stage) {
-          const status = data.status || 'SUBMITTED';
-          let stage: LoanStage = 'SUBMITTED';
-          if (status === 'SUBMITTED' || status === 'IN_REVIEW') stage = 'UNDER_REVIEW';
-          if (status === 'APPROVED') stage = 'FINAL_DECISION';
-          
+        const stage = normalizeApplicationStage(data.current_stage, data.status);
+        if (data.current_stage !== stage || data.status !== stage) {
           await updateDoc(doc(db, 'applications', applicationDoc.id), {
             current_stage: stage,
+            status: stage === 'DISBURSED' ? 'APPROVED' : stage,
             updatedAt: serverTimestamp()
           });
           migratedCount++;
@@ -1801,15 +2184,11 @@ function App() {
       const localApps = getLocalApplications();
       let localMigrated = false;
       const updatedLocalApps = localApps.map(app => {
-        if (!app.current_stage) {
-          const status = app.status || 'SUBMITTED';
-          let stage: LoanStage = 'SUBMITTED';
-          if (status === 'SUBMITTED' || status === 'IN_REVIEW') stage = 'UNDER_REVIEW';
-          if (status === 'APPROVED') stage = 'FINAL_DECISION';
-          
+        const stage = normalizeApplicationStage(app.current_stage, app.status);
+        if (app.current_stage !== stage || app.status !== stage) {
           localMigrated = true;
           migratedCount++;
-          return { ...app, current_stage: stage, updatedAt: new Date().toISOString() };
+          return { ...app, current_stage: stage, status: stage === 'DISBURSED' ? 'APPROVED' : stage, updatedAt: new Date().toISOString() };
         }
         return app;
       });
@@ -1858,57 +2237,101 @@ function App() {
     }
   };
 
-  const handleStageTransition = async (application: any, toStage: LoanStage, comment: string = '') => {
-    const fromStage = application.current_stage || 'SUBMITTED';
-    
-    // Validation
-    const transitionMap: Record<LoanStage, LoanStage[]> = {
-      'SUBMITTED': ['UNDER_REVIEW'],
-      'UNDER_REVIEW': ['CRB_CHECK'],
-      'CRB_CHECK': ['ANALYSIS'],
-      'ANALYSIS': ['FINAL_DECISION'],
-      'FINAL_DECISION': ['APPROVED'],
-      'APPROVED': ['DISBURSED'],
-      'DISBURSED': []
+
+
+  const handleStageTransition = async (application: any, toStage: LoanStage, comment: string = '', analysisData?: any) => {
+    const fromStage = normalizeApplicationStage(application.current_stage, application.status);
+    const normalizedTarget = normalizeApplicationStage(toStage);
+
+    const transitionMap: Record<string, LoanStage[]> = {
+      PENDING: ['REVIEWED', 'REFERRED_BACK'],
+      REVIEWED: ['ANALYZED', 'REFERRED_BACK'],
+      ANALYZED: ['APPROVED', 'REJECTED', 'REFERRED_BACK'],
+      APPROVED: ['DISBURSED'],
+      REFERRED_BACK: ['PENDING'],
+      REJECTED: [],
+      DISBURSED: []
     };
 
-    const roleMap: Record<LoanStage, UserRole[]> = {
-      'SUBMITTED': ['OFFICER', 'ADMIN'],
-      'UNDER_REVIEW': ['OFFICER', 'ADMIN'],
-      'CRB_CHECK': ['OFFICER', 'ADMIN', 'CREDIT_ANALYST'],
-      'ANALYSIS': ['CREDIT_ANALYST', 'ADMIN'],
-      'FINAL_DECISION': ['MANAGER', 'ADMIN'],
-      'APPROVED': ['ADMIN', 'MANAGER'],
-      'DISBURSED': ['ADMIN', 'OFFICER']
+    const actorMap: Record<string, UserRole[]> = {
+      'PENDING:REVIEWED': ['OFFICER', 'ADMIN'],
+      'PENDING:REFERRED_BACK': ['OFFICER', 'ADMIN'],
+      'REVIEWED:ANALYZED': ['CREDIT_ANALYST', 'ADMIN'],
+      'REVIEWED:REFERRED_BACK': ['CREDIT_ANALYST', 'ADMIN'],
+      'ANALYZED:APPROVED': ['MANAGER', 'ADMIN'],
+      'ANALYZED:REJECTED': ['MANAGER', 'ADMIN'],
+      'ANALYZED:REFERRED_BACK': ['MANAGER', 'ADMIN'],
+      'APPROVED:DISBURSED': ['OFFICER', 'ADMIN'],
+      'REFERRED_BACK:PENDING': ['CLIENT', 'OFFICER', 'ADMIN'],
     };
 
-    if (!transitionMap[fromStage as LoanStage]?.includes(toStage)) {
+    if (!transitionMap[fromStage]?.includes(normalizedTarget)) {
       toast.error(`Invalid transition from ${fromStage} to ${toStage}`);
       return false;
     }
 
-    if (!roleMap[toStage]?.includes(role)) {
-      toast.error(`Your role (${role}) is not authorized to move a loan to ${toStage}`);
+    const actorKey = `${fromStage}:${normalizedTarget}`;
+    if (!actorMap[actorKey]?.includes(role)) {
+      toast.error(`Your role (${role}) is not authorized to move a loan to ${normalizedTarget}`);
       return false;
     }
 
-    // Phase 2 Rule: No CRB -> No ANALYSIS
-    if (toStage === 'ANALYSIS' && !application.crb) {
-      toast.error("Mandatory Requirement: Fetch CRB data before proceeding to Analysis.");
+    if (!comment.trim()) {
+      toast.error('A decision comment is required for every workflow action.');
       return false;
     }
+
+    if ((normalizedTarget === 'ANALYZED' || normalizedTarget === 'REFERRED_BACK' || normalizedTarget === 'APPROVED' || normalizedTarget === 'REJECTED') && (!analysisData?.reasons || analysisData.reasons.length === 0)) {
+      toast.error('At least one structured reason is required for this decision.');
+      return false;
+    }
+
+    if (normalizedTarget === 'ANALYZED' && !application.crb) {
+      toast.error("Mandatory Requirement: Fetch CRB data before proceeding to analyst completion.");
+      return false;
+    }
+
+    const workflowEntry = {
+      stage: normalizedTarget,
+      role,
+      comment: comment.trim(),
+      reasons: analysisData?.reasons || [],
+      decision: analysisData?.decision || normalizedTarget,
+      actorId: sessionProfile?.id || user?.uid || 'system',
+      actorName: sessionProfile?.name || user?.displayName || 'System User',
+      createdAt: new Date().toISOString(),
+    };
 
     try {
-      const updateData = {
-        current_stage: toStage,
+      const updateData: any = {
+        current_stage: normalizedTarget,
+        status: normalizedTarget === 'DISBURSED' ? 'APPROVED' : normalizedTarget,
+        latestDecision: workflowEntry,
+        decisionTrail: [...(application.decisionTrail || []), workflowEntry],
         updatedAt: serverTimestamp()
       };
 
-      if (application.id.startsWith('local-app-')) {
+      if (analysisData) {
+        updateData.analysis = normalizedTarget === 'ANALYZED' ? {
+          ...analysisData,
+          analystId: sessionProfile?.id || user?.uid || 'system',
+          analystName: sessionProfile?.name || user?.displayName || 'System Analyst',
+          createdAt: new Date().toISOString()
+        } : {
+          ...(application.analysis || {}),
+          ...analysisData,
+        };
+      }
+
+      if (normalizedTarget === 'APPROVED' || normalizedTarget === 'REJECTED' || normalizedTarget === 'REFERRED_BACK') {
+        updateData.finalDecision = workflowEntry;
+      }
+
+      if (isLocalApplicationId(application.id)) {
         const apps = getLocalApplications();
         const index = apps.findIndex(a => a.id === application.id);
         if (index >= 0) {
-          apps[index] = { ...apps[index], ...updateData, updatedAt: new Date().toISOString() };
+          apps[index] = normalizeApplicationRecord({ ...apps[index], ...updateData, updatedAt: new Date().toISOString() });
           localStorage.setItem(LOCAL_APPLICATIONS_KEY, JSON.stringify(apps));
           setApplications([...apps]);
         }
@@ -1916,17 +2339,17 @@ function App() {
         await updateDoc(doc(db, 'applications', application.id), updateData);
       }
 
-      await recordWorkflowHistory(application.id, fromStage as LoanStage, toStage, comment);
+      await recordWorkflowHistory(application.id, fromStage as LoanStage, normalizedTarget, comment);
       // Phase 5: Stage change notification
       await createNotification(
         'STAGE_CHANGE',
-        `Application Stage: ${toStage.replace(/_/g, ' ')}`,
-        `Application for ${application.clientSnapshot?.name || 'Unknown Client'} has moved from ${fromStage.replace(/_/g, ' ')} to ${toStage.replace(/_/g, ' ')}.${comment ? ` Note: ${comment}` : ''}`,
+        `Application Stage: ${normalizedTarget.replace(/_/g, ' ')}`,
+        `Application for ${application.clientSnapshot?.name || 'Unknown Client'} has moved from ${fromStage.replace(/_/g, ' ')} to ${normalizedTarget.replace(/_/g, ' ')}. Note: ${comment}`,
         'ALL',
         undefined,
         application.id
       );
-      toast.success(`Loan moved to ${toStage.replace('_', ' ')}`);
+      toast.success(`Loan moved to ${normalizedTarget.replace('_', ' ')}`);
       return true;
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `applications/${application.id}`);
@@ -1948,7 +2371,7 @@ function App() {
   const handleApplicationUpdate = async (applicationId: string, updateData: any) => {
     try {
       const fullUpdate = { ...updateData, updatedAt: serverTimestamp() };
-      if (applicationId.startsWith('local-app-')) {
+      if (isLocalApplicationId(applicationId)) {
         const apps = getLocalApplications();
         const index = apps.findIndex(a => a.id === applicationId);
         if (index >= 0) {
@@ -1996,7 +2419,7 @@ function App() {
       toast.success(`CRB Check Complete: ${riskLevel} Risk (${score})`);
       
       // Update local state immediately if needed (handleApplicationUpdate already does it for local-*)
-      if (!application.id.startsWith('local-app-')) {
+      if (!isLocalApplicationId(application.id)) {
         setApplications(prev => prev.map(a => a.id === application.id ? { ...a, crb: crbData } : a));
       }
 
@@ -2090,101 +2513,46 @@ function App() {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const userResult = result.user;
-      const normalizedEmail = normalizeEmail(userResult.email || '');
-      
-      let profile = await fetchUserProfileByEmail(normalizedEmail);
-      
-      if (!profile) {
-        // Create basic client profile on first login (Phase 1)
-        const generatedId = `client-${Math.random().toString(36).substr(2, 9)}`;
-        const newProfile: AuthProfile = {
-          id: generatedId,
-          uid: generatedId,
-          name: userResult.displayName || 'Valued Client',
-          email: normalizedEmail,
-          role: 'CLIENT',
-          status: 'ACTIVE',
-          kycComplete: false, // Force Phase 2 KYC after login
-          createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString(),
-          lastDevice: getDeviceInfo()
-        };
-        
-        try {
-          await setDoc(doc(db, 'users', generatedId), {
-            ...newProfile,
-            createdAt: serverTimestamp(),
-            lastLogin: serverTimestamp()
-          });
-        } catch (e) {
-          saveLocalUser(newProfile);
-        }
-        profile = newProfile;
-      } else {
-        // Update existing profile
-        const updated = { ...profile, lastLogin: new Date().toISOString(), lastDevice: getDeviceInfo() };
-        if (profile.id.startsWith('demo-') || profile.id.startsWith('client-local')) {
-          saveLocalUser(updated);
-        } else {
-          updateDoc(doc(db, 'users', profile.id), { 
-            lastLogin: serverTimestamp(), 
-            lastDevice: getDeviceInfo() 
-          }).catch(console.error);
-        }
-        profile = updated;
-      }
-      
-      setLocalSessionProfile(profile);
-      setAuthProfile(null);
-      setRole(profile.role);
-      setCurrentView('dashboard');
-      toast.success(`Welcome, ${profile.name}!`);
-    } catch (error: any) {
-      console.error("Google login failed", error);
-      toast.error(`Sign-in Failed: ${error.message}`);
-    }
-  };
+
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const normalizedEmail = normalizeEmail(email);
+    setLoading(true);
     try {
       setLoginError(null);
       // Check predefined role accounts for simulation
       if (predefinedRoleAccounts[normalizedEmail] && predefinedRoleAccounts[normalizedEmail].password === password) {
-        const localUser: AuthProfile = {
+        const localUser = normalizeAuthProfile({
           id: `local-${predefinedRoleAccounts[normalizedEmail].role}`,
           uid: `local-${predefinedRoleAccounts[normalizedEmail].role}`,
           email: normalizedEmail,
           name: predefinedRoleAccounts[normalizedEmail].name,
           role: predefinedRoleAccounts[normalizedEmail].role,
           status: 'ACTIVE',
-          kycComplete: true
-        };
-        setLocalSessionProfile(localUser);
-        setAuthProfile(null);
-        setRole(localUser.role);
-        setCurrentView('dashboard');
-        toast.success(`Welcome, ${localUser.name}!`);
+          kycComplete: true,
+          kycStatus: 'COMPLETE',
+        });
+        activateSession(localUser, null, 'manual');
         return;
       }
       
-      await signInWithEmailAndPassword(auth, normalizedEmail, password);
-      // onAuthStateChanged will handle the rest
+      const credentials = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      const profile = await resolveAuthProfile(credentials.user);
+      if (!profile) {
+        await signOut(auth);
+        resetSessionState();
+        setLoginError('No access profile was found for this account.');
+        toast.error('No access profile was found for this account.');
+        return;
+      }
+      activateSession(profile, credentials.user, 'manual');
     } catch (error: any) {
       // Local fallback for clients
       try {
         const profile = await fetchUserProfileByEmail(normalizedEmail);
         if (profile) {
-          setLocalSessionProfile(profile);
-          setAuthProfile(null);
-          setRole(profile.role);
-          setCurrentView('dashboard');
-          toast.success(`Welcome back, ${profile.name}! (Simulation Mode)`);
+          activateSession(profile, null, 'manual');
         } else {
           setLoginError(error.message);
           toast.error(`Login failed: ${error.message}`);
@@ -2192,7 +2560,77 @@ function App() {
       } catch (fallbackError) {
         setLoginError(error.message);
         toast.error(`Login failed: ${error.message}`);
+      } finally {
+        setLoading(false);
       }
+      return;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAgentCollection = async (loan: any, amount: number) => {
+    const normalizedAmount = Number(amount);
+    if (!loan || !Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
+      toast.error('Enter a valid collection amount.');
+      return false;
+    }
+
+    const reference = `AGENT-${Date.now()}`;
+    const agentIdentity = sessionProfile?.name || sessionProfile?.email || 'field-agent@fastkwacha.com';
+    const agentEmail = getActiveSessionEmail(sessionProfile) || sessionProfile?.email || 'field-agent@fastkwacha.com';
+    const success = await processRepayment(loan, normalizedAmount, agentEmail, 'CASH', reference);
+
+    if (!success) {
+      return false;
+    }
+
+    await generateReceipt(
+      loan.id,
+      'REPAYMENT',
+      reference,
+      normalizedAmount,
+      agentIdentity,
+      loan.clientName || 'Valued Client',
+      'CASH',
+      'Field collection recorded by agent terminal.',
+      {
+        penalty: 0,
+        interest: 0,
+        principal: normalizedAmount,
+      },
+      undefined,
+      {
+        remainingBalance: Math.max(0, (loan.outstandingBalance || 0) - normalizedAmount),
+        collectedBy: agentEmail,
+      },
+      true,
+      `local-agent-collection-${Date.now()}`
+    );
+
+    return true;
+  };
+
+  const handleGoogleClientAuth = async () => {
+    setLoading(true);
+    try {
+      setLoginError(null);
+      const provider = new GoogleAuthProvider();
+      provider.setCustomParameters({ prompt: 'select_account' });
+      const result = await signInWithPopup(auth, provider);
+      const profile = await resolveAuthProfile(result.user);
+      if (!profile) {
+        await signOut(auth);
+        resetSessionState();
+        toast.error('No access profile was found for this account.');
+        return;
+      }
+      activateSession(profile, result.user, 'manual');
+    } catch (error: any) {
+      setLoginError(error.message || 'Google sign-in failed.');
+      toast.error(error.message || 'Google sign-in failed.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -2200,11 +2638,12 @@ function App() {
     e?.preventDefault();
     if (isRegistering) return; 
     setIsRegistering(true); 
+    setLoading(true);
     const normalizedEmail = normalizeEmail(registrationData.email);
 
-    // Phase 1 Only: Name, Email, Password
-    if (!registrationData.fullName || !normalizedEmail || !registrationData.password || !registrationData.confirmPassword) {
-      toast.error('Complete all required fields: Full Name, Email, and Password.');
+    // Mandatory Full KYC: Name, Email, Phone, National ID, Password
+    if (!registrationData.fullName || !normalizedEmail || !registrationData.password || !registrationData.phone || !registrationData.nationalId) {
+      toast.error('Identity Protocol Error: All fields (Name, Email, Phone, National ID, and Password) are mandatory for registration.');
       setIsRegistering(false);
       return;
     }
@@ -2216,45 +2655,77 @@ function App() {
     }
 
     try {
+      // 1. Email Uniqueness
       const existingEmail = await fetchUserProfileByEmail(normalizedEmail);
       if (existingEmail) {
-        toast.error('Email already registered. Try logging in.');
+        toast.error('Identity Conflict: Email already registered.');
+        setIsRegistering(false);
+        return;
+      }
+
+      // 2. Phone Uniqueness
+      const existingPhone = await fetchUserProfileByPhone(registrationData.phone);
+      if (existingPhone) {
+        toast.error('Identity Conflict: Phone number already registered.');
+        setIsRegistering(false);
+        return;
+      }
+
+      // 3. Password Strength (Min 8 characters, 1 uppercase, 1 digit)
+      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+      if (!passwordRegex.test(registrationData.password)) {
+        toast.error('Security Protocol Violation: Password must be at least 8 characters long and contain at least one uppercase letter and one digit.');
+        setIsRegistering(false);
+        return;
+      }
+
+      // 4. National ID Format (8 chars Alphanumeric)
+      const nationalIdRegex = /^[A-Z0-9]{8}$/i;
+      if (!nationalIdRegex.test(registrationData.nationalId)) {
+        toast.error('Identity Validation Error: National ID must be exactly 8 alphanumeric characters.');
         setIsRegistering(false);
         return;
       }
       
-      const generatedId = `client-${Math.random().toString(36).substr(2, 9)}`;
-      const payload: AuthProfile = {
-        id: generatedId,
-        uid: generatedId,
+
+      const credentials = await createUserWithEmailAndPassword(auth, normalizedEmail, registrationData.password);
+      registrationHydrationRef.current = credentials.user.uid;
+
+      const payload = normalizeAuthProfile({
+        id: credentials.user.uid,
+        uid: credentials.user.uid,
         name: registrationData.fullName.trim(),
         email: normalizedEmail,
+        phone: registrationData.phone.trim(),
+        nationalId: registrationData.nationalId.trim(),
         role: 'CLIENT',
         status: 'ACTIVE',
-        kycComplete: false, // Phase 1 Complete, Phase 2 (KYC) Required
+        kycComplete: false,
+        kycStatus: 'INCOMPLETE',
         createdAt: new Date().toISOString(),
         lastLogin: new Date().toISOString(),
-      };
+      });
 
       try {
-        await setDoc(doc(db, 'users', generatedId), {
+        await setDoc(doc(db, 'users', credentials.user.uid), {
           ...payload,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-          passwordHint: 'enc_client_auth'
+          lastLogin: serverTimestamp(),
+          passwordHint: 'enc_client_auth_primary'
         });
       } catch (err) {
         saveLocalUser(payload);
+        setLocalSessionProfile(payload);
       }
 
-      setLocalSessionProfile(payload);
-      setRole('CLIENT');
-      setCurrentView('dashboard');
-      toast.success('Account initialized! Please complete your profile to access lending.');
+      activateSession(payload, credentials.user, 'manual');
+      toast.success('Registration successful. Complete your KYC to unlock loan applications.');
     } catch (error: any) {
-      toast.error(`Initialization Failed: ${error.message}`);
+      toast.error(`Registration Failed: ${error.message}`);
     } finally {
       setIsRegistering(false);
+      setLoading(false);
     }
   };
 
@@ -2455,20 +2926,44 @@ function App() {
   };
 
   const handleLogout = async () => {
+    setLoading(true);
+    isLoggingOutRef.current = true;
     try {
-      if (localSessionProfile && !user) {
-        setLocalSessionProfile(null);
-        setAuthProfile(null);
-        setRole('CLIENT');
-        setCurrentView('dashboard');
-        toast.info("Logged out successfully");
-        return;
+      if (user) {
+        await signOut(auth);
+      } else {
+        resetSessionState();
       }
-      await signOut(auth);
+
+      setIsAuthenticated(false);
       toast.info("Logged out successfully");
     } catch (error) {
       console.error("Logout failed", error);
+      resetSessionState();
+      toast.error("Logout encountered an issue, but your local session was cleared.");
+    } finally {
+      if (!auth.currentUser) {
+        resetSessionState();
+      }
+      setLoading(false);
+      isLoggingOutRef.current = false;
     }
+  };
+
+  const authContextValue = React.useMemo(() => ({
+    isAuthenticated,
+    role,
+    loading,
+    currentPath,
+    navigateTo,
+  }), [currentPath, isAuthenticated, loading, navigateTo, role]);
+
+  const allowedRolesByPath: Partial<Record<AppPath, UserRole[]>> = {
+    '/client': ['CLIENT'],
+    '/officer': ['OFFICER', 'AGENT'],
+    '/analyst': ['CREDIT_ANALYST'],
+    '/manager': ['MANAGER'],
+    '/admin': ['ADMIN'],
   };
 
   if (loading) {
@@ -2482,7 +2977,7 @@ function App() {
     );
   }
 
-  if (user && !authProfile) {
+  if (isAuthenticated && user && !authProfile) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
@@ -2493,7 +2988,7 @@ function App() {
     );
   }
 
-  if (!user && !localSessionProfile) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row overflow-hidden font-sans">
         {/* Left Side: Institutional Branding */}
@@ -2519,15 +3014,15 @@ function App() {
               <div className="flex items-center gap-4 text-slate-300">
                 <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center"><ShieldCheck size={20} /></div>
                 <div>
-                  <p className="text-xs font-black uppercase tracking-widest leading-none">Institutional Security</p>
+                  <p className="text-xs font-black uppercase tracking-widest leading-none">Proactive Security</p>
                   <p className="text-[10px] text-slate-500 font-medium">Bank-grade encryption & audit trails.</p>
                 </div>
               </div>
               <div className="flex items-center gap-4 text-slate-300">
                 <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center"><Zap size={20} /></div>
                 <div>
-                  <p className="text-xs font-black uppercase tracking-widest leading-none">24h SLA Guarantee</p>
-                  <p className="text-[10px] text-slate-500 font-medium">Automated monitoring for rapid decisions.</p>
+                  <p className="text-xs font-black uppercase tracking-widest leading-none">Fast Decisions</p>
+                  <p className="text-[10px] text-slate-500 font-medium">Rapid monitoring for quick loan approvals.</p>
                 </div>
               </div>
             </div>
@@ -2540,15 +3035,15 @@ function App() {
             <div className="text-center md:text-left space-y-3">
                <div className="inline-flex items-center gap-2 bg-slate-900 text-white px-4 py-1.5 rounded-full mb-4">
                   <ShieldAlert size={12} className="text-brand-400" />
-                  <span className="text-[9px] font-black uppercase tracking-[0.2em]">{authMode === 'login' ? 'Staff Access & Client Portal' : 'Onboarding Protocol'}</span>
+                  <span className="text-[9px] font-black uppercase tracking-[0.2em]">{authMode === 'login' ? 'Secure Portal' : 'Create Account'}</span>
                </div>
                <h2 className="text-3xl font-black text-slate-900 tracking-tighter">
-                {authMode === 'login' ? 'Enter Terminal' : 'Create Account'}
+                {authMode === 'login' ? 'Welcome Back' : 'Join FastKwacha'}
                </h2>
                <p className="text-slate-500 text-sm font-medium">
                   {authMode === 'login' 
-                    ? 'Access the financial infrastructure with verified credentials.' 
-                    : 'Initialize your client profile for lending facility access.'}
+                    ? 'Sign in to manage your FastKwacha account.' 
+                    : 'Get started with a new client account today.'}
                </p>
             </div>
 
@@ -2561,45 +3056,69 @@ function App() {
                   exit={{ opacity: 0, x: 20 }}
                   className="space-y-8"
                 >
-                  <Button 
-                    onClick={handleGoogleLogin}
-                    variant="outline"
-                    className="w-full h-14 border-2 border-slate-100 hover:border-brand-500/20 hover:bg-slate-50 rounded-2xl flex items-center justify-center gap-3 font-black text-xs uppercase tracking-widest transition-all shadow-sm"
-                  >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24">
-                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
-                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                    </svg>
-                    Continue with Google
-                  </Button>
-
-                  <div className="relative text-center">
-                    <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-100"></span></div>
-                    <span className="relative px-4 bg-white text-[9px] font-black tracking-widest text-slate-400 uppercase">Secure Email Access</span>
+                  <div className="text-center pt-2">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Enter your credentials to continue</p>
                   </div>
 
                   <form onSubmit={handleLogin} className="space-y-5">
                     <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Identity</label>
-                      <Input type="email" placeholder="name@domain.com" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Address</label>
+                      <Input 
+                        type="email" 
+                        placeholder="name@email.com" 
+                        className={`h-14 rounded-2xl border-2 font-bold transition-all ${emailError ? 'border-red-500 bg-red-50/10' : 'border-slate-100 focus:border-brand-500 text-slate-900'} focus:ring-0`}
+                        value={email} 
+                        autoComplete="username"
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (e.target.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value)) {
+                            setEmailError('Invalid email format');
+                          } else {
+                            setEmailError(null);
+                          }
+                        }} 
+                        required 
+                      />
+                      {emailError && <p className="text-[10px] text-red-500 font-bold ml-2 uppercase tracking-widest">{emailError}</p>}
                     </div>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Master Password</label>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Password</label>
                         <button type="button" className="text-[9px] font-black text-brand-600 uppercase tracking-widest hover:underline">Forgot?</button>
                       </div>
-                      <Input type="password" placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                      <div className="relative">
+                        <Input 
+                          type={showPassword ? 'text' : 'password'} 
+                          placeholder="••••••••" 
+                          className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold pr-14" 
+                          value={password} 
+                          onChange={(e) => setPassword(e.target.value)} 
+                          required 
+                        />
+                        <button 
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-slate-600 transition-colors"
+                        >
+                          {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                        </button>
+                      </div>
                     </div>
-                    <Button type="submit" className="w-full h-14 bg-slate-900 hover:bg-brand-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-slate-900/10 transition-all">
+                    <Button type="submit" aria-label="Authorize Access" className="w-full h-14 bg-slate-900 hover:bg-brand-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-slate-900/10 transition-all">
                       Authorize Access
+                    </Button>
+                    <Button type="button" variant="outline" onClick={handleGoogleClientAuth} className="w-full h-14 border-2 border-slate-200 bg-white font-black text-xs uppercase tracking-widest rounded-2xl">
+                      Continue With Google
                     </Button>
                   </form>
 
+                  {loginError && (
+                    <p className="text-[10px] text-red-600 font-bold uppercase tracking-widest text-center">{loginError}</p>
+                  )}
+
                   <div className="text-center pt-8 border-t border-slate-50">
-                    <p className="text-xs text-slate-500 mb-1">Institutional First Time Access?</p>
-                    <button onClick={() => setAuthMode('register')} className="text-brand-600 text-xs font-black uppercase tracking-widest hover:underline">New Client Registration</button>
+                    <p className="text-xs text-slate-500 mb-1">New to FastKwacha?</p>
+                    <button onClick={() => setAuthMode('register')} className="text-brand-600 text-xs font-black uppercase tracking-widest hover:underline">Create an Account</button>
                   </div>
                 </motion.div>
               ) : (
@@ -2610,29 +3129,110 @@ function App() {
                    exit={{ opacity: 0, x: -20 }}
                    className="space-y-6"
                 >
-                  <form onSubmit={handleClientRegistration} className="space-y-5">
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Legal Full Name</label>
-                      <Input placeholder="Enter as per National ID" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.fullName} onChange={(e) => setRegistrationData({ ...registrationData, fullName: e.target.value })} required />
+                  <form onSubmit={handleClientRegistration} className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Legal Full Name <span className="text-brand-600">*</span></label>
+                      <Input placeholder="Enter as per National ID" className="h-12 rounded-xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.fullName} onChange={(e) => setRegistrationData({ ...registrationData, fullName: e.target.value })} required />
                     </div>
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Identity</label>
-                      <Input type="email" placeholder="name@email.com" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.email} onChange={(e) => setRegistrationData({ ...registrationData, email: e.target.value })} required />
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Identity <span className="text-brand-600">*</span></label>
+                      <Input 
+                        type="email" 
+                        placeholder="name@email.com" 
+                        className={`h-12 rounded-xl border-2 font-bold transition-all ${emailError ? 'border-red-500 bg-red-50/10' : 'border-slate-100 focus:border-brand-500 text-slate-900'} focus:ring-0`}
+                        value={registrationData.email} 
+                        onChange={(e) => {
+                          setRegistrationData({ ...registrationData, email: e.target.value });
+                          if (e.target.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value)) {
+                            setEmailError('Invalid email format');
+                          } else {
+                            setEmailError(null);
+                          }
+                        }} 
+                        required 
+                      />
+                      {emailError && <p className="text-[9px] text-red-500 font-bold ml-2 uppercase tracking-widest">{emailError}</p>}
                     </div>
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Master Code</label>
-                        <Input type="password" placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.password} onChange={(e) => setRegistrationData({ ...registrationData, password: e.target.value })} required />
+                       <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone Number <span className="text-brand-600">*</span></label>
+                        <Input 
+                          placeholder="099..." 
+                          className="h-12 rounded-xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" 
+                          value={registrationData.phone} 
+                          onChange={(e) => setRegistrationData({ ...registrationData, phone: e.target.value })} 
+                          required 
+                        />
                       </div>
-                      <div className="space-y-3">
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Confirm</label>
-                        <Input type="password" placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.confirmPassword} onChange={(e) => setRegistrationData({ ...registrationData, confirmPassword: e.target.value })} required />
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">National ID <span className="text-brand-600">*</span></label>
+                        <Input 
+                          placeholder="8 Characters" 
+                          className="h-12 rounded-xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" 
+                          value={registrationData.nationalId} 
+                          onChange={(e) => setRegistrationData({ ...registrationData, nationalId: e.target.value })} 
+                          required 
+                        />
+                        <p className="text-[9px] text-slate-400 font-bold">Format: 8 Alphanumeric (e.g. ABC123D4)</p>
                       </div>
                     </div>
-                    <p className="text-[9px] text-slate-400 italic">Phase 1 of 2: Basic identity creation. Phone and National ID required after login.</p>
-                    <Button type="submit" className="w-full h-14 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-brand-500/20 transition-all">
-                      Initialize Onboarding
-                    </Button>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Master Code <span className="text-brand-600">*</span></label>
+                        <div className="relative">
+                          <Input 
+                            type={showPassword ? 'text' : 'password'} 
+                            placeholder="Min 8 chars" 
+                            className={`h-12 rounded-xl border-2 font-bold pr-10 transition-all ${passwordError ? 'border-red-500 bg-red-50/10' : 'border-slate-100 focus:border-brand-500 text-slate-900'} focus:ring-0`}
+                            value={registrationData.password} 
+                            onChange={(e) => {
+                              setRegistrationData({ ...registrationData, password: e.target.value });
+                              if (e.target.value && !/^(?=.*[A-Za-z])(?=.*\d).{8,}$/.test(e.target.value)) {
+                                setPasswordError('Needs 8+ chars, upper & digit');
+                              } else {
+                                setPasswordError(null);
+                              }
+                            }} 
+                            required 
+                          />
+                          <button 
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 transition-colors"
+                          >
+                            {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                        {passwordError && <p className="text-[8px] text-red-500 font-bold uppercase tracking-widest">{passwordError}</p>}
+                        {!passwordError && <p className="text-[8px] text-slate-400 font-bold">Req: Uppercase & Digit</p>}
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Confirm <span className="text-brand-600">*</span></label>
+                        <div className="relative">
+                          <Input 
+                            type={showPassword ? 'text' : 'password'} 
+                            placeholder="••••••••" 
+                            className={`h-12 rounded-xl border-2 font-bold pr-10 transition-all ${registrationData.confirmPassword && registrationData.confirmPassword !== registrationData.password ? 'border-red-500 bg-red-50/10' : 'border-slate-100 focus:border-brand-500 text-slate-900'} focus:ring-0`}
+                            value={registrationData.confirmPassword} 
+                            onChange={(e) => setRegistrationData({ ...registrationData, confirmPassword: e.target.value })} 
+                            required 
+                          />
+                        </div>
+                        {registrationData.confirmPassword && registrationData.confirmPassword !== registrationData.password && (
+                          <p className="text-[8px] text-red-500 font-bold uppercase tracking-widest">Passwords do not match</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <Button type="submit" className="w-full h-12 bg-brand-600 hover:bg-brand-700 text-white font-black text-xs uppercase tracking-widest rounded-xl shadow-xl shadow-brand-500/20 transition-all">
+                        Complete Registration & Access Hub
+                      </Button>
+                    </div>
+                    <div className="pt-1">
+                      <Button type="button" variant="outline" onClick={handleGoogleClientAuth} className="w-full h-12 border-2 border-slate-200 bg-white font-black text-[10px] uppercase tracking-widest rounded-xl">
+                        Continue With Google
+                      </Button>
+                    </div>
                   </form>
                   <div className="text-center">
                     <button onClick={() => setAuthMode('login')} className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em] hover:text-slate-600">Back to Authorized Login</button>
@@ -2653,7 +3253,7 @@ function App() {
     );
   }
 
-  if (sessionProfile && sessionProfile.status !== 'ACTIVE' && !isPendingAgent) {
+  if (sessionProfile && sessionProfile.status !== 'ACTIVE' && !isPendingStaff) {
     return (
       <RestrictedAccessScreen
         profile={sessionProfile}
@@ -2662,8 +3262,40 @@ function App() {
     );
   }
 
+  if (currentPath === '/unauthorized') {
+    return (
+      <AuthProvider value={authContextValue}>
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
+          <Card className="w-full max-w-xl rounded-[2rem] border border-slate-200 shadow-xl bg-white">
+            <CardContent className="p-10 text-center space-y-6">
+              <div className="mx-auto w-16 h-16 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center">
+                <ShieldAlert size={28} />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Unauthorized Access</h2>
+                <p className="text-sm text-slate-500 font-medium">
+                  Your current role does not have permission to open this route.
+                </p>
+              </div>
+              <div className="flex gap-3 justify-center">
+                <Button onClick={() => navigateTo(getPathForRole(role), { replace: true })} className="bg-slate-900 text-white hover:bg-slate-800">
+                  Go To My Dashboard
+                </Button>
+                <Button variant="outline" onClick={handleLogout}>
+                  Logout
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </AuthProvider>
+    );
+  }
+
   return (
-    <div className="flex h-screen bg-background font-sans text-foreground overflow-hidden">
+    <AuthProvider value={authContextValue}>
+      <ProtectedRoute allowedRoles={allowedRolesByPath[currentPath]}>
+        <div className="flex h-screen bg-background font-sans text-foreground overflow-hidden">
       {/* Mobile Sidebar Overlay */}
       {isMobileSidebarOpen && (
         <div
@@ -2694,13 +3326,15 @@ function App() {
         </div>
 
         <nav className="flex-1 space-y-0.5 mt-4">
-          <NavItem 
-            icon={<LayoutDashboard size={16} />} 
-            label="Dashboard" 
-            active={currentView === 'dashboard'} 
-            onClick={() => setCurrentView('dashboard')}
-            collapsed={!isSidebarOpen}
-          />
+          {role === 'ADMIN' && (
+            <NavItem 
+              icon={<LayoutDashboard size={16} />} 
+              label="Dashboard" 
+              active={currentView === 'dashboard'} 
+              onClick={() => setCurrentView('dashboard')}
+              collapsed={!isSidebarOpen}
+            />
+          )}
           
           {role === 'ADMIN' && (
             <>
@@ -2763,6 +3397,53 @@ function App() {
             </>
           )}
 
+          {role === 'MANAGER' && (
+            <>
+              <NavItem 
+                icon={<LayoutDashboard size={16} />} 
+                label="Overview" 
+                active={currentView === 'dashboard'} 
+                onClick={() => setCurrentView('dashboard')}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem 
+                icon={<CheckCircle2 size={16} />} 
+                label="Decision Queue" 
+                active={currentView === 'manager-decision'} 
+                onClick={() => setCurrentView('manager-decision')}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem 
+                icon={<Briefcase size={16} />} 
+                label="Portfolio Control" 
+                active={currentView === 'manager-portfolio'} 
+                onClick={() => setCurrentView('manager-portfolio')}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem 
+                icon={<ShieldAlert size={16} />} 
+                label="Risk Guard" 
+                active={currentView === 'manager-risk'} 
+                onClick={() => setCurrentView('manager-risk')}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem 
+                icon={<BarChart3 size={16} />} 
+                label="Operational Reports" 
+                active={currentView === 'reports'} 
+                onClick={() => setCurrentView('reports')}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem 
+                icon={<History size={16} />} 
+                label="Security Audit" 
+                active={currentView === 'audit-logs'} 
+                onClick={() => setCurrentView('audit-logs')}
+                collapsed={!isSidebarOpen}
+              />
+            </>
+          )}
+
           {(role === 'ADMIN' || role === 'MANAGER') && (
             <NavItem 
               icon={<Zap size={16} />} 
@@ -2773,59 +3454,6 @@ function App() {
             />
           )}
 
-          {role === 'OFFICER' && (
-            <>
-              <NavItem 
-                icon={<Users size={16} />} 
-                label="Clients" 
-                active={currentView === 'clients'} 
-                onClick={() => setCurrentView('clients')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<FileText size={16} />} 
-                label="Applications" 
-                active={currentView === 'applications'} 
-                onClick={() => setCurrentView('applications')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<CheckCircle2 size={16} />} 
-                label="Approvals" 
-                active={currentView === 'approvals'} 
-                onClick={() => setCurrentView('approvals')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<CreditCard size={16} />} 
-                label="Repayments" 
-                active={currentView === 'repayments'} 
-                onClick={() => setCurrentView('repayments')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<ShieldCheck size={16} />} 
-                label="Repayment Audit" 
-                active={currentView === 'repayment-audit'} 
-                onClick={() => setCurrentView('repayment-audit')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<DollarSign size={16} />} 
-                label="Loans" 
-                active={currentView === 'loans'} 
-                onClick={() => setCurrentView('loans')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<BarChart3 size={16} />} 
-                label="Reports" 
-                active={currentView === 'reports'} 
-                onClick={() => setCurrentView('reports')}
-                collapsed={!isSidebarOpen}
-              />
-            </>
-          )}
 
           {role === 'CREDIT_ANALYST' && (
             <>
@@ -2942,27 +3570,88 @@ function App() {
             </>
           )}
 
-          {role === 'CLIENT' && (
+          {role === 'AGENT' && (
             <>
               <NavItem
                 icon={<LayoutDashboard size={16} />}
-                label="My Dashboard"
+                label="Dashboard"
                 active={currentView === 'dashboard'}
-                onClick={() => setCurrentView('dashboard')}
+                onClick={() => { setCurrentView('dashboard'); setIsMobileSidebarOpen(false); }}
                 collapsed={!isSidebarOpen}
               />
               <NavItem
-                icon={<FileEdit size={16} />}
-                label="Apply for Loan"
-                active={currentView === 'applications'}
-                onClick={() => setCurrentView('applications')}
+                icon={<Users size={16} />}
+                label="Clients"
+                active={currentView === 'clients'}
+                onClick={() => { setCurrentView('clients'); setIsMobileSidebarOpen(false); }}
                 collapsed={!isSidebarOpen}
               />
               <NavItem
-                icon={<Receipt size={16} />}
-                label="My Receipts"
-                active={currentView === 'dashboard'}
+                icon={<Clock size={16} />}
+                label="Due Loans"
+                active={currentView === 'due-loans'}
+                onClick={() => { setCurrentView('due-loans'); setIsMobileSidebarOpen(false); }}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem
+                icon={<History size={16} />}
+                label="Transactions"
+                active={currentView === 'transactions'}
+                onClick={() => { setCurrentView('transactions'); setIsMobileSidebarOpen(false); }}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem
+                icon={<CreditCard size={16} />}
+                label="Payments"
+                active={currentView === 'payments'}
+                onClick={() => { setCurrentView('payments'); setIsMobileSidebarOpen(false); }}
+                collapsed={!isSidebarOpen}
+              />
+            </>
+          )}
+
+          {role === 'CLIENT' && (
+            <>
+              <NavItem 
+                icon={<LayoutDashboard size={16} />} 
+                label="Dashboard" 
+                active={currentView === 'dashboard'} 
                 onClick={() => setCurrentView('dashboard')}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem 
+                icon={<Briefcase size={16} />} 
+                label="Loans" 
+                active={currentView === 'loans'} 
+                onClick={() => setCurrentView('loans')}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem 
+                icon={<Zap size={16} />} 
+                label="Repayments" 
+                active={currentView === 'repayments'} 
+                onClick={() => setCurrentView('repayments')}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem 
+                icon={<FileText size={16} />} 
+                label="Receipts" 
+                active={currentView === 'receipts'} 
+                onClick={() => setCurrentView('receipts')}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem 
+                icon={<BellRing size={16} />} 
+                label="Notifications" 
+                active={currentView === 'notifications'} 
+                onClick={() => setCurrentView('notifications')}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem 
+                icon={<UserIcon size={16} />} 
+                label="Profile" 
+                active={currentView === 'profile'} 
+                onClick={() => setCurrentView('profile')}
                 collapsed={!isSidebarOpen}
               />
             </>
@@ -2990,14 +3679,16 @@ function App() {
               </div>
             </div>
           )}
-          <Button 
-            variant="ghost" 
-            onClick={handleLogout}
-            className="w-full justify-start gap-3 text-sidebar-foreground hover:text-white hover:bg-sidebar-accent h-9 px-2"
-          >
-            <LogOut size={16} />
-            {isSidebarOpen && <span className="text-xs">Logout</span>}
-          </Button>
+          {role !== 'CLIENT' && (
+            <Button 
+              variant="ghost" 
+              onClick={handleLogout}
+              className="w-full justify-start gap-3 text-sidebar-foreground hover:text-white hover:bg-sidebar-accent h-9 px-2"
+            >
+              <LogOut size={16} />
+              {isSidebarOpen && <span className="text-xs">Logout</span>}
+            </Button>
+          )}
         </div>
       </aside>
 
@@ -3042,9 +3733,11 @@ function App() {
               >
                 Export CSV
               </Button>
-              <Button size="sm" className="h-9 px-4 text-xs font-semibold bg-primary text-white" onClick={() => !isPendingAgent && setCurrentView('applications')} disabled={isPendingAgent}>
-                + New Application
-              </Button>
+              {role === 'OFFICER' && (
+                <Button size="sm" className="h-9 px-4 text-xs font-semibold bg-primary text-white" onClick={() => setCurrentView('applications')}>
+                  <Plus size={14} className="mr-2" /> New Application
+                </Button>
+              )}
             </div>
             <Separator orientation="vertical" className="h-6" />
 
@@ -3138,13 +3831,15 @@ function App() {
         {/* View Content */}
         <div className="flex-1 min-h-0 overflow-y-auto p-6">
           <AnimatePresence mode="wait">
-            {currentView === 'dashboard' && (
-              <motion.div key="dashboard">
-                {role === 'CLIENT' ? (
+            {role === 'CLIENT' && (
+              <>
+                <motion.div key={currentView}>
                   <ClientDashboardView 
+                    view={currentView}
                     loans={loans.filter(l => l.clientSnapshot?.email === (sessionProfile?.email || user?.email) || l.clientId === sessionProfile?.id)}
                     receipts={receipts.filter(r => r.clientId === sessionProfile?.id || loans.some(l => l.id === r.loanId && (l.clientSnapshot?.email === (sessionProfile?.email || user?.email) || l.clientId === sessionProfile?.id)))}
                     profile={sessionProfile}
+                    notifications={notifications.filter(n => n.clientId === sessionProfile?.id || n.targetEmail === sessionProfile?.email)}
                     onNavigate={(v) => setCurrentView(v)}
                     onPay={(loan) => {
                       setSelectedLoanForPayment(loan);
@@ -3154,43 +3849,66 @@ function App() {
                       setSelectedReceipt(rcpt);
                       setIsReceiptModalOpen(true);
                     }}
+                    handleLogout={handleLogout}
+                    settings={clientSettings}
+                    onUpdateSettings={async (newSettings) => {
+                      setClientSettings(newSettings);
+                      if (sessionProfile) {
+                        try {
+                          await updateDoc(doc(db, 'users', sessionProfile.id), { settings: newSettings });
+                          toast.success("Settings saved.");
+                        } catch (e) {
+                          console.error("Failed to save settings", e);
+                        }
+                      }
+                    }}
+                    clients={clients}
+                    applications={applications}
+                    uploadDocument={uploadDocument}
                   />
-                ) : (
-                    <DashboardView 
-                      clients={clients} 
-                      loans={loans} 
-                      applications={applications} 
-                      role={role} 
-                      users={users} 
-                      transactions={transactions} 
-                      onNavigate={(v) => setCurrentView(v)}
-                      onUpdateUserStatus={updateUserAccessStatus}
-                      handleStageTransition={handleStageTransition}
-                      fetchCRBReport={fetchCRBReport}
-                      workflowHistory={workflowHistory}
-                      handleSaveManualCRB={handleSaveManualCRB}
-                      loanProducts={loanProducts}
-                      repaymentSchedules={repaymentSchedules}
-                      runWorkflowMigration={runWorkflowMigration}
-                      recordWorkflowHistory={recordWorkflowHistory}
-                      sessionProfile={sessionProfile}
-                      user={user}
-                      generateReceipt={generateReceipt}
-                    />
-                )}
+                </motion.div>
+              </>
+            )}
+
+            {(currentView === 'dashboard' || currentView === 'manager-decision' || currentView === 'manager-portfolio' || currentView === 'manager-risk') && role !== 'CLIENT' && (
+              <motion.div key="dashboard">
+                <DashboardView 
+                  view={currentView}
+                  clients={clients} 
+                  loans={loans} 
+                  applications={applications} 
+                  role={role} 
+                  users={users} 
+                  transactions={transactions} 
+                  onNavigate={(v) => setCurrentView(v)}
+                  onUpdateUserStatus={updateUserAccessStatus}
+                  handleStageTransition={handleStageTransition}
+                  fetchCRBReport={fetchCRBReport}
+                  workflowHistory={workflowHistory}
+                  handleSaveManualCRB={handleSaveManualCRB}
+                  loanProducts={loanProducts}
+                  repaymentSchedules={repaymentSchedules}
+                  runWorkflowMigration={runWorkflowMigration}
+                  recordWorkflowHistory={recordWorkflowHistory}
+                  managerNote={managerNote}
+                  setManagerNote={setManagerNote}
+                  sessionProfile={sessionProfile}
+                  user={user}
+                  generateReceipt={generateReceipt}
+                />
               </motion.div>
             )}
-            {currentView === 'clients' && (
+            {currentView === 'clients' && role !== 'CLIENT' && (
               <motion.div key="clients">
                 <ClientsView clients={clients} loans={loans} role={role} />
               </motion.div>
             )}
-            {currentView === 'applications' && (
+            {currentView === 'applications' && role !== 'CLIENT' && (
               <motion.div key="applications">
-                {isPendingAgent ? <PendingAgentWorkspace profile={sessionProfile!} /> : <ApplicationsView clients={role === 'CLIENT' ? clients.filter(c => c.email === (sessionProfile?.email || user?.email) || c.id === sessionProfile?.id) : clients} applications={role === 'CLIENT' ? applications.filter(a => a.clientSnapshot?.email === (sessionProfile?.email || user?.email) || a.clientId === sessionProfile?.id || a.clientEmail === (sessionProfile?.email || user?.email)) : applications} role={role} sessionProfile={sessionProfile!} uploadDocument={uploadDocument} />}
+                <ApplicationsView clients={clients} applications={applications} role={role} sessionProfile={sessionProfile!} uploadDocument={uploadDocument} />
               </motion.div>
             )}
-            {currentView === 'approvals' && (
+            {currentView === 'approvals' && role !== 'CLIENT' && (
               <motion.div key="approvals">
                 <ApprovalsView 
                   applications={applications} 
@@ -3209,17 +3927,30 @@ function App() {
             )}
             {currentView === 'payments' && (
               <motion.div key="payments">
-                <RepaymentsView loans={loans} role={role} loanProducts={loanProducts} />
+                {role === 'AGENT' ? (
+                  <AgentPaymentCollectionView
+                    loans={loans}
+                    clients={clients}
+                    onCollect={handleAgentCollection}
+                  />
+                ) : (
+                  <RepaymentsView loans={loans} role={role} loanProducts={loanProducts} />
+                )}
               </motion.div>
             )}
             {currentView === 'transactions' && (
               <motion.div key="transactions">
-                <TransactionsAuditView transactions={transactions} loans={loans} />
+                <TransactionsAuditView transactions={transactions} loans={loans} role={role} />
               </motion.div>
             )}
             {currentView === 'due-loans' && (
               <motion.div key="due-loans">
-                <LoansView loans={loans.filter(l => l.status === 'ACTIVE' || l.status === 'OVERDUE' || l.status === 'DEFAULTED')} clients={clients} />
+                <LoansView
+                  loans={loans.filter(l => l.status === 'ACTIVE' || l.status === 'OVERDUE' || l.status === 'DEFAULTED')}
+                  clients={clients}
+                  title={role === 'AGENT' ? 'Due & Overdue Tracking' : 'Loan Portfolio'}
+                  description={role === 'AGENT' ? 'Focus on active field collections and facilities that need immediate follow-up.' : 'Global view of all active, closed, and defaulted loans.'}
+                />
               </motion.div>
             )}
             {currentView === 'users' && (
@@ -3285,23 +4016,42 @@ function App() {
             )}
             {currentView === 'settings' && (
               <motion.div key="settings">
-                <SettingsView 
-                  profile={sessionProfile!} 
-                  systemSettings={systemSettings}
-                  onUpdateSystemSettings={(settings) => {
-                    setSystemSettings(settings);
-                    setDoc(doc(db, 'system_settings', 'global'), settings);
-                  }}
-                  onUpdateProfile={(updatedProfile) => {
-                    if (sessionProfile?.id.startsWith('demo-')) {
-                      saveLocalUser(updatedProfile);
-                      setLocalSessionProfile(updatedProfile);
-                    } else {
-                      updateDoc(doc(db, 'users', sessionProfile!.id), updatedProfile as any);
-                    }
-                    toast.success("Profile updated successfully.");
-                  }}
-                />
+                {role === 'CLIENT' ? (
+                  <ClientDashboardView 
+                    view="settings"
+                    loans={[]}
+                    receipts={[]}
+                    profile={sessionProfile}
+                    notifications={[]}
+                    onNavigate={(v) => setCurrentView(v)}
+                    onPay={() => {}}
+                    onViewReceipt={() => {}}
+                    handleLogout={handleLogout}
+                    settings={clientSettings}
+                    onUpdateSettings={async (s) => setClientSettings(s)}
+                    clients={clients}
+                    applications={applications}
+                    uploadDocument={uploadDocument}
+                  />
+                ) : (
+                  <SettingsView 
+                    profile={sessionProfile!} 
+                    systemSettings={systemSettings}
+                    onUpdateSystemSettings={(settings) => {
+                      setSystemSettings(settings);
+                      setDoc(doc(db, 'system_settings', 'global'), settings);
+                    }}
+                    onUpdateProfile={(updatedProfile) => {
+                      if (sessionProfile?.id.startsWith('demo-')) {
+                        saveLocalUser(updatedProfile);
+                        setLocalSessionProfile(updatedProfile);
+                      } else {
+                        updateDoc(doc(db, 'users', sessionProfile!.id), updatedProfile as any);
+                      }
+                      toast.success("Profile updated successfully.");
+                    }}
+                  />
+                )}
               </motion.div>
             )}
             {currentView === 'automation-center' && (role === 'ADMIN' || role === 'MANAGER') && (
@@ -3344,7 +4094,9 @@ function App() {
           onClose={() => setIsPaychanguModalOpen(false)}
         />
       )}
-    </div>
+        </div>
+      </ProtectedRoute>
+    </AuthProvider>
   );
 }
 
@@ -3370,7 +4122,7 @@ function ReceiptViewerModal({ receipt, isOpen, onClose }: { receipt: ReceiptReco
               <ShieldCheck className="text-white" size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-900 tracking-tighter">OFFICIAL RECORD</h2>
+              <h2 className="text-xl font-black text-slate-900 tracking-tighter">OFFICIAL RECEIPT</h2>
               <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest leading-none mt-1">Verified Financial Statement</p>
             </div>
           </div>
@@ -3445,15 +4197,15 @@ function ReceiptViewerModal({ receipt, isOpen, onClose }: { receipt: ReceiptReco
                   <>
                     <div className="flex justify-between items-center text-sm">
                       <span className="text-slate-500 font-medium tracking-tight">Approved Loan Amount</span>
-                      <span className="text-slate-900 font-black">MWK {receipt.disbursementDetails.disbursedAmount.toLocaleString()}</span>
+                      <span className="text-slate-900 font-black">{formatCurrency(receipt.disbursementDetails.disbursedAmount || 0)}</span>
                     </div>
                     <div className="flex justify-between items-center text-sm text-red-600">
                       <span className="font-medium tracking-tight">Total Processing Fees</span>
-                      <span className="font-black">- MWK {receipt.disbursementDetails.feesDeducted.toLocaleString()}</span>
+                      <span className="font-black">- {formatCurrency(receipt.disbursementDetails.feesDeducted || 0)}</span>
                     </div>
                     <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
                       <span className="text-base font-black text-slate-900">Net Disbursement Sent</span>
-                      <span className="text-2xl font-black text-slate-900 tracking-tighter">MWK {receipt.disbursementDetails.netAmountSent.toLocaleString()}</span>
+                      <span className="text-2xl font-black text-slate-900 tracking-tighter">{formatCurrency(receipt.disbursementDetails.netAmountSent || 0)}</span>
                     </div>
                   </>
                 ) : (
@@ -3462,23 +4214,23 @@ function ReceiptViewerModal({ receipt, isOpen, onClose }: { receipt: ReceiptReco
                       <div className="space-y-3 pb-4 border-b border-slate-50">
                         <div className="flex justify-between items-center text-xs">
                           <span className="text-slate-400 font-bold uppercase tracking-widest">Principal Recovery</span>
-                          <span className="text-slate-900 font-black">MWK {receipt.allocation.principal.toLocaleString()}</span>
+                          <span className="text-slate-900 font-black">{formatCurrency(receipt.allocation.principal || 0)}</span>
                         </div>
                         <div className="flex justify-between items-center text-xs">
                           <span className="text-slate-400 font-bold uppercase tracking-widest">Interest Paid</span>
-                          <span className="text-slate-900 font-black">MWK {receipt.allocation.interest.toLocaleString()}</span>
+                          <span className="text-slate-900 font-black">{formatCurrency(receipt.allocation.interest || 0)}</span>
                         </div>
-                        {receipt.allocation.penalty > 0 && (
+                        {(receipt.allocation.penalty || 0) > 0 && (
                           <div className="flex justify-between items-center text-xs">
                             <span className="text-amber-600 font-bold uppercase tracking-widest">Late Penalties</span>
-                            <span className="text-amber-600 font-black">MWK {receipt.allocation.penalty.toLocaleString()}</span>
+                            <span className="text-amber-600 font-black">{formatCurrency(receipt.allocation.penalty || 0)}</span>
                           </div>
                         )}
                       </div>
                     )}
                     <div className="pt-2 flex justify-between items-center">
                       <span className="text-base font-black text-slate-900 italic">Total Payment Confirmed</span>
-                      <span className="text-3xl font-black text-brand-600 tracking-tighter">MWK {receipt.amount.toLocaleString()}</span>
+                      <span className="text-3xl font-black text-brand-600 tracking-tighter">{formatCurrency(receipt.amount || 0)}</span>
                     </div>
                   </>
                 )}
@@ -3545,7 +4297,7 @@ function RestrictedAccessScreen({ profile, onLogout }: { profile: AuthProfile, o
       <Card className="max-w-2xl w-full border-none shadow-2xl overflow-hidden">
         <div className={`p-8 text-white ${isPending ? 'bg-amber-500' : profile.status === 'REJECTED' ? 'bg-red-600' : 'bg-slate-700'}`}>
           <h1 className="text-2xl font-bold">
-            {isPending ? 'Agent Approval Pending' : profile.status === 'REJECTED' ? 'Account Rejected' : 'Account Suspended'}
+            {isPending ? 'Institutional Approval Pending' : profile.status === 'REJECTED' ? 'Account Rejected' : 'Account Suspended'}
           </h1>
           <p className="text-sm mt-2 opacity-90">
             {isPending
@@ -3678,7 +4430,119 @@ function PendingAgentWorkspace({
   );
 }
 
+function AgentDashboardView({
+  clients,
+  loans,
+  transactions,
+  onNavigate,
+  sessionProfile,
+}: {
+  clients: any[],
+  loans: any[],
+  transactions: any[],
+  onNavigate: (view: View) => void,
+  sessionProfile: AuthProfile | null,
+}) {
+  const agentEmail = sessionProfile?.email;
+  const relevantLoans = loans
+    .filter((loan) => !agentEmail || !loan.assignedAgentEmail || loan.assignedAgentEmail === agentEmail)
+    .sort((left, right) => new Date(left.nextDueDate || left.updatedAt || 0).getTime() - new Date(right.nextDueDate || right.updatedAt || 0).getTime());
+  const priorityCollections = relevantLoans.filter((loan) => (loan.outstandingBalance || 0) > 0).slice(0, 5);
+  const todayCollections = transactions
+    .filter((tx) => tx.type === 'REPAYMENT' && getTimestampDate(tx.timestamp)?.toDateString() === new Date().toDateString())
+    .reduce((sum, tx) => sum + (tx.amount || 0), 0);
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="space-y-8 pb-12">
+      <div className="rounded-[2.5rem] bg-slate-950 text-white p-8 lg:p-10 shadow-2xl">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-[10px] font-black uppercase tracking-[0.24em] text-emerald-200">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              Field Operations Live
+            </div>
+            <h1 className="text-4xl lg:text-5xl font-black tracking-tighter italic">Agent Mission Control</h1>
+            <p className="max-w-2xl text-sm text-slate-300 font-medium">
+              Stay focused on today&apos;s collections, client follow-ups, and the facilities that need immediate action.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-4 min-w-[280px]">
+            <div className="rounded-3xl bg-white/5 border border-white/10 p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Clients</p>
+              <p className="mt-2 text-3xl font-black">{clients.length}</p>
+            </div>
+            <div className="rounded-3xl bg-emerald-400/10 border border-emerald-400/20 p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-200">Collected Today</p>
+              <p className="mt-2 text-3xl font-black">{formatCurrency(todayCollections)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        <Card className="xl:col-span-2 rounded-[2rem] border border-slate-200 shadow-none bg-white">
+          <CardContent className="p-0">
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-black tracking-tight text-slate-900">Priority Collections</h2>
+                <p className="text-sm text-slate-500 mt-1">Field-ready accounts with live balances and upcoming due dates.</p>
+              </div>
+              <Button onClick={() => onNavigate('payments')} className="bg-slate-900 hover:bg-slate-800 text-white font-black">
+                Open Payments
+              </Button>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {priorityCollections.length === 0 ? (
+                <div className="p-8 text-sm text-slate-500 italic">No active collections are assigned right now.</div>
+              ) : (
+                priorityCollections.map((loan) => (
+                  <div key={loan.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <p className="text-lg font-black text-slate-900">{loan.clientName || clients.find((client) => client.id === loan.clientId)?.name || 'Unknown Client'}</p>
+                      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 mt-1">
+                        Loan #{loan.id.slice(0, 8).toUpperCase()} • Due {formatDateLabel(loan.nextDueDate)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Outstanding</p>
+                        <p className="text-xl font-black text-slate-900">{formatCurrency(loan.outstandingBalance || 0)}</p>
+                      </div>
+                      <Button variant="outline" className="font-black" onClick={() => onNavigate('payments')}>
+                        Collect
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-[2rem] border border-slate-200 shadow-none bg-white">
+          <CardContent className="p-6 space-y-4">
+            <h3 className="text-lg font-black text-slate-900">Field Shortcuts</h3>
+            <Button variant="outline" className="w-full justify-start font-black" onClick={() => onNavigate('clients')}>
+              Client Management
+            </Button>
+            <Button variant="outline" className="w-full justify-start font-black" onClick={() => onNavigate('due-loans')}>
+              Due &amp; Overdue Tracking
+            </Button>
+            <Button variant="outline" className="w-full justify-start font-black" onClick={() => onNavigate('transactions')}>
+              Transaction History
+            </Button>
+            <Button className="w-full justify-start bg-emerald-600 hover:bg-emerald-700 text-white font-black" onClick={() => onNavigate('payments')}>
+              Payment Collection
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </motion.div>
+  );
+}
+
 function DashboardView({ 
+  view,
   clients, 
   loans, 
   applications, 
@@ -3694,31 +4558,45 @@ function DashboardView({
   loanProducts,
   repaymentSchedules,
   runWorkflowMigration,
-  recordWorkflowHistory
+  recordWorkflowHistory,
+  managerNote,
+  setManagerNote,
+  sessionProfile,
+  user,
+  generateReceipt
 }: { 
+  view: View,
   clients: any[], 
   loans: any[], 
   applications: any[], 
   role: UserRole, 
   users: any[], 
   transactions: any[], 
-  onNavigate: (view: View) => void, 
+  onNavigate: (v: View) => void, 
   onUpdateUserStatus: (user: any, status: UserStatus) => Promise<void>,
   handleStageTransition: (app: any, stage: LoanStage, comment?: string) => Promise<boolean>,
   fetchCRBReport: (app: any) => Promise<void>,
   workflowHistory: any[],
-  handleSaveManualCRB: (app: any, score: number, summary: string) => Promise<void>,
+  handleSaveManualCRB: (appId: string, score: number, summary: string) => Promise<void>,
   loanProducts: LoanProduct[],
   repaymentSchedules: any[],
   runWorkflowMigration: () => Promise<void>,
   recordWorkflowHistory: (loanId: string, fromStage: LoanStage | 'NONE', toStage: LoanStage, comment?: string) => Promise<void>,
+  managerNote: string,
+  setManagerNote: (value: string) => void,
   sessionProfile: AuthProfile | null,
   user: any,
   generateReceipt: any
 }) {
+  // Map App-level view to Manager internal tabs
+  const activeManagerTab = view === 'manager-decision' ? 'decision' : 
+                          view === 'manager-portfolio' ? 'portfolio' : 
+                          view === 'manager-risk' ? 'risk' : 
+                          view === 'reports' ? 'reports' :
+                          view === 'audit-logs' ? 'audit' : 'overview';
   const totalOutstanding = loans.reduce((acc, loan) => acc + (loan.outstandingBalance || 0), 0);
   const activeLoansCount = loans.filter(l => l.status === 'ACTIVE').length;
-  const pendingAppsCount = applications.filter(a => a.status === 'SUBMITTED' || a.status === 'IN_REVIEW').length;
+  const pendingAppsCount = applications.filter(a => ['PENDING', 'REVIEWED', 'ANALYZED'].includes(normalizeApplicationStage(a.current_stage, a.status))).length;
 
   if (role === 'OFFICER') {
     return (
@@ -3729,6 +4607,18 @@ function DashboardView({
         transactions={transactions} 
         onNavigate={onNavigate} 
         handleStageTransition={handleStageTransition}
+      />
+    );
+  }
+
+  if (role === 'AGENT') {
+    return (
+      <AgentDashboardView
+        clients={clients}
+        loans={loans}
+        transactions={transactions}
+        onNavigate={onNavigate}
+        sessionProfile={sessionProfile}
       />
     );
   }
@@ -3747,6 +4637,18 @@ function DashboardView({
         loanProducts={loanProducts}
         recordWorkflowHistory={recordWorkflowHistory}
         generateReceipt={generateReceipt}
+        managerNote={managerNote}
+        setManagerNote={setManagerNote}
+        activeTab={activeManagerTab}
+        onTabChange={(tab: any) => {
+          // If it maps to a top-level view, navigate App
+          if (tab === 'decision') onNavigate('manager-decision');
+          else if (tab === 'portfolio') onNavigate('manager-portfolio');
+          else if (tab === 'risk') onNavigate('manager-risk');
+          else if (tab === 'reports') onNavigate('reports');
+          else if (tab === 'audit') onNavigate('audit-logs');
+          else onNavigate('dashboard');
+        }}
       />
     );
   }
@@ -3762,6 +4664,20 @@ function DashboardView({
         onNavigate={onNavigate}
         onUpdateUserStatus={onUpdateUserStatus}
         runWorkflowMigration={runWorkflowMigration}
+      />
+    );
+  }
+
+  if (role === 'CREDIT_ANALYST') {
+    return (
+      <CreditAnalystDashboardView 
+        applications={applications} 
+        clients={clients} 
+        loans={loans} 
+        onNavigate={onNavigate} 
+        handleStageTransition={handleStageTransition}
+        fetchCRBReport={fetchCRBReport}
+        handleSaveManualCRB={handleSaveManualCRB}
       />
     );
   }
@@ -3783,6 +4699,10 @@ function ManagerDashboardView({
   loanProducts,
   recordWorkflowHistory,
   generateReceipt,
+  managerNote,
+  setManagerNote,
+  activeTab,
+  onTabChange,
 }: {
   clients: any[],
   loans: any[],
@@ -3794,12 +4714,25 @@ function ManagerDashboardView({
   handleStageTransition: (app: any, stage: LoanStage, comment?: string) => Promise<boolean>,
   loanProducts: LoanProduct[],
   recordWorkflowHistory: (loanId: string, fromStage: LoanStage | 'NONE', toStage: LoanStage, comment?: string) => Promise<void>,
-  generateReceipt: any
+  generateReceipt: any,
+  managerNote: string;
+  setManagerNote: (v: string) => void;
+  activeTab: 'overview' | 'decision' | 'portfolio' | 'risk' | 'reports' | 'audit';
+  onTabChange: (tab: any) => void;
 }) {
   const handleManagerApprove = async (application: any, productId: string, note: string, override = false) => {
     const product = loanProducts.find(item => item.id === productId);
     if (!product) {
       toast.error('Select an active loan product before approval.');
+      return false;
+    }
+    if (!note.trim()) {
+      toast.error('Manager approval requires a comment.');
+      return false;
+    }
+    const analysisReasons = application.analysis?.reasons || application.latestDecision?.reasons || [];
+    if (analysisReasons.length === 0) {
+      toast.error('Manager approval requires analyst reasons on the application record.');
       return false;
     }
 
@@ -3810,9 +4743,6 @@ function ManagerDashboardView({
     const originatingAgentEmail = application.originatingAgentEmail || application.assignedAgentEmail || application.metadata?.createdBy?.email || '';
     const appFee = calculateChargeValue(requestedAmount, product.charges.applicationFee);
     const procFee = calculateChargeValue(requestedAmount, product.charges.processingFee);
-    const totalFees = appFee + procFee;
-    const netDisbursement = requestedAmount - appFee;
-    const effectiveDisbursement = product.feeDistribution === 'DEDUCTED' ? netDisbursement : requestedAmount;
     const isLocalApplication = application.id?.startsWith('local-') || application.id?.startsWith('demo-') || getLocalApplications().some(item => item.id === application.id);
 
     try {
@@ -3827,10 +4757,17 @@ function ManagerDashboardView({
           selectedProductId: product.id,
           managerNote: note,
           managerOverride: override,
+          finalDecision: {
+            decision: override ? 'OVERRIDE_APPROVE' : 'APPROVE',
+            reasons: analysisReasons,
+            comment: note,
+            role: 'MANAGER',
+            createdAt: approvedAt,
+          },
           updatedAt: approvedAt,
         };
         saveLocalApplication(updatedApplication);
-        await recordWorkflowHistory(application.id, application.current_stage || 'FINAL_DECISION', 'APPROVED', `${override ? 'OVERRIDE_APPROVE' : 'FINAL_APPROVE'}: ${note || 'No note provided'}`);
+        await recordWorkflowHistory(application.id, normalizeApplicationStage(application.current_stage, application.status), 'APPROVED', `${override ? 'OVERRIDE_APPROVE' : 'FINAL_APPROVE'}: ${note || 'No note provided'}`);
 
         const loanId = `local-loan-${Date.now()}`;
         const newLoan = {
@@ -3843,11 +4780,10 @@ function ManagerDashboardView({
           amount: requestedAmount,
           outstandingBalance: requestedAmount,
           interestRate: product.interestRate,
-          status: 'ACTIVE',
+          status: 'PENDING_DISBURSEMENT',
           type: product.name,
           termMonths: application.termMonths || 1,
           monthlyIncome,
-          nextDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           originatingAgentEmail,
           assignedAgentEmail: originatingAgentEmail,
           approvedBy: reviewerEmail,
@@ -3857,45 +4793,13 @@ function ManagerDashboardView({
             approvedAt,
             feesApplied: { appFee, procFee },
             managerOverride: override,
+            disbursementStatus: 'AWAITING_OFFICER_CONFIRMATION',
           },
           crb: application.crb || null,
-          disbursedAt: approvedAt,
           createdAt: approvedAt,
           updatedAt: approvedAt,
         };
         saveLocalLoan(newLoan);
-
-        const schedule = generateRepaymentSchedule(loanId, requestedAmount, product.interestRate, application.termMonths || 1).map((item, index) => ({
-          ...item,
-          id: `local-schedule-${loanId}-${index + 1}`,
-        }));
-        saveLocalRepaymentSchedules([...getLocalRepaymentSchedules(), ...schedule]);
-
-        saveLocalTransactionRecord({
-          id: `local-charge-${Date.now()}`,
-          loanId,
-          clientId: application.clientId,
-          clientName,
-          type: 'CHARGE',
-          amount: totalFees,
-          reference: `FEES-${application.id.slice(0, 8)}`,
-          agentEmail: reviewerEmail,
-          timestamp: approvedAt,
-          comment: `Application Fee (${appFee}) + Processing Fee (${procFee})`,
-        });
-
-        saveLocalTransactionRecord({
-          id: `local-disb-${Date.now() + 1}`,
-          loanId,
-          clientId: application.clientId,
-          clientName,
-          type: 'DISBURSEMENT',
-          amount: effectiveDisbursement,
-          reference: `DISB-${application.id.slice(0, 8)}`,
-          agentEmail: reviewerEmail,
-          timestamp: approvedAt,
-          comment: `Manager final approval disbursement (${product.feeDistribution})`,
-        });
 
         // Generate Decision Receipt
         await generateReceipt(
@@ -3911,23 +4815,17 @@ function ManagerDashboardView({
           { status: 'APPROVED', note },
           true
         );
-
-        // Generate Disbursement Receipt
-        await generateReceipt(
+        await createNotification(
+          'LOAN_APPROVED',
+          'Loan Approved',
+          `Loan for ${clientName} has been approved and is awaiting loan officer disbursement confirmation.`,
+          'CLIENT',
           loanId,
-          'DISBURSEMENT',
-          `DISB-${application.id.slice(0, 8)}`,
-          effectiveDisbursement,
-          reviewerEmail,
-          clientName,
-          'CASH_LOCAL',
-          `Local Disbursement: MWK ${effectiveDisbursement.toLocaleString()}`,
-          requestedAmount,
-          {},
-          true
+          application.id,
+          { selectedProductId: product.id, override }
         );
 
-        toast.success(override ? 'Override approval completed.' : 'Application approved and disbursed.');
+        toast.success(override ? 'Override approval completed. Loan is awaiting disbursement confirmation.' : 'Application approved. Loan is awaiting disbursement confirmation.');
         return true;
       }
 
@@ -3940,9 +4838,16 @@ function ManagerDashboardView({
         selectedProductId: product.id,
         managerNote: note,
         managerOverride: override,
+        finalDecision: {
+          decision: override ? 'OVERRIDE_APPROVE' : 'APPROVE',
+          reasons: analysisReasons,
+          comment: note,
+          role: 'MANAGER',
+          createdAt: new Date().toISOString(),
+        },
         updatedAt: serverTimestamp(),
       });
-      await recordWorkflowHistory(application.id, application.current_stage || 'FINAL_DECISION', 'APPROVED', `${override ? 'OVERRIDE_APPROVE' : 'FINAL_APPROVE'}: ${note || 'No note provided'}`);
+      await recordWorkflowHistory(application.id, normalizeApplicationStage(application.current_stage, application.status), 'APPROVED', `${override ? 'OVERRIDE_APPROVE' : 'FINAL_APPROVE'}: ${note || 'No note provided'}`);
 
       const loanRef = await addDoc(collection(db, 'loans'), {
         clientId: application.clientId,
@@ -3953,11 +4858,10 @@ function ManagerDashboardView({
         amount: requestedAmount,
         outstandingBalance: requestedAmount,
         interestRate: product.interestRate,
-        status: 'ACTIVE',
+        status: 'PENDING_DISBURSEMENT',
         type: product.name,
         termMonths: application.termMonths || 1,
         monthlyIncome,
-        nextDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         originatingAgentEmail,
         assignedAgentEmail: originatingAgentEmail,
         approvedBy: reviewerEmail,
@@ -3967,19 +4871,13 @@ function ManagerDashboardView({
           approvedAt,
           feesApplied: { appFee, procFee },
           managerOverride: override,
-          feeDistribution: product.feeDistribution
+          feeDistribution: product.feeDistribution,
+          disbursementStatus: 'AWAITING_OFFICER_CONFIRMATION',
         },
         crb: application.crb || null,
-        disbursedAt: serverTimestamp(),
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-
-      const schedule = generateRepaymentSchedule(loanRef.id, requestedAmount, product.interestRate, application.termMonths || 1);
-      await Promise.all(schedule.map(item => addDoc(collection(db, 'repayment_schedule'), item)));
-      
-      await recordTransaction(loanRef.id, application.clientId, 'CHARGE', totalFees, `FEES-${application.id.slice(0, 8)}`, reviewerEmail, `Application Fee (${appFee}) + Processing Fee (${procFee})`);
-      await recordTransaction(loanRef.id, application.clientId, 'DISBURSEMENT', effectiveDisbursement, `DISB-${application.id.slice(0, 8)}`, reviewerEmail, `Manager final approval disbursement (${product.feeDistribution})`);
       
       // Generate Decision Receipt
       await generateReceipt(
@@ -3994,21 +4892,17 @@ function ManagerDashboardView({
         requestedAmount,
         { status: 'APPROVED', note }
       );
-
-      // Generate Disbursement Receipt
-      await generateReceipt(
+      await createNotification(
+        'LOAN_APPROVED',
+        'Loan Approved',
+        `Loan for ${clientName} has been approved and is awaiting loan officer disbursement confirmation.`,
+        'CLIENT',
         loanRef.id,
-        'DISBURSEMENT',
-        `DISB-${application.id.slice(0, 8)}`,
-        effectiveDisbursement,
-        reviewerEmail,
-        clientName,
-        'SYSTEM_BANK_TRANSFER',
-        `Release of loan funds. Fees distribution: ${product.feeDistribution}.`,
-        requestedAmount
+        application.id,
+        { selectedProductId: product.id, override }
       );
 
-      toast.success(override ? 'Override approval completed.' : 'Application approved and disbursed.');
+      toast.success(override ? 'Override approval completed. Loan is awaiting disbursement confirmation.' : 'Application approved. Loan is awaiting disbursement confirmation.');
       return true;
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, `applications/${application.id}`);
@@ -4017,26 +4911,47 @@ function ManagerDashboardView({
   };
 
   const handleManagerReject = async (application: any, note: string) => {
+    if (!note.trim()) {
+      toast.error('Manager rejection requires a comment.');
+      return false;
+    }
     const reviewerEmail = getActiveSessionEmail() || 'manager-console';
+    const analysisReasons = application.analysis?.reasons || application.latestDecision?.reasons || [];
     const isLocalApplication = application.id?.startsWith('local-') || application.id?.startsWith('demo-') || getLocalApplications().some(item => item.id === application.id);
     try {
       if (isLocalApplication) {
         saveLocalApplication({
           ...application,
           status: 'REJECTED',
+          current_stage: 'REJECTED',
           managerNote: note,
           approvedBy: reviewerEmail,
+          finalDecision: {
+            decision: 'REJECT',
+            reasons: analysisReasons,
+            comment: note,
+            role: 'MANAGER',
+            createdAt: new Date().toISOString(),
+          },
           updatedAt: new Date().toISOString(),
         });
       } else {
         await updateDoc(doc(db, 'applications', application.id), {
           status: 'REJECTED',
+          current_stage: 'REJECTED',
           managerNote: note,
           approvedBy: reviewerEmail,
+          finalDecision: {
+            decision: 'REJECT',
+            reasons: analysisReasons,
+            comment: note,
+            role: 'MANAGER',
+            createdAt: new Date().toISOString(),
+          },
           updatedAt: serverTimestamp(),
         });
       }
-      await recordWorkflowHistory(application.id, application.current_stage || 'FINAL_DECISION', application.current_stage || 'FINAL_DECISION', `FINAL_REJECT: ${note || 'No note provided'}`);
+      await recordWorkflowHistory(application.id, normalizeApplicationStage(application.current_stage, application.status), 'REJECTED', `FINAL_REJECT: ${note || 'No note provided'}`);
       
       // Generate Decision (Rejection) Receipt
       await generateReceipt(
@@ -4064,22 +4979,39 @@ function ManagerDashboardView({
   const handleManagerSendBack = async (application: any, note: string) => {
     const isLocalApplication = application.id?.startsWith('local-') || application.id?.startsWith('demo-') || getLocalApplications().some(item => item.id === application.id);
     const sendBackNote = note || 'Returned for additional review.';
+    const analysisReasons = application.analysis?.reasons || application.latestDecision?.reasons || [];
     try {
       if (isLocalApplication) {
         saveLocalApplication({
           ...application,
-          current_stage: 'UNDER_REVIEW',
+          status: 'REFERRED_BACK',
+          current_stage: 'REFERRED_BACK',
           managerNote: sendBackNote,
+          finalDecision: {
+            decision: 'REFER_BACK',
+            reasons: analysisReasons,
+            comment: sendBackNote,
+            role: 'MANAGER',
+            createdAt: new Date().toISOString(),
+          },
           updatedAt: new Date().toISOString(),
         });
       } else {
         await updateDoc(doc(db, 'applications', application.id), {
-          current_stage: 'UNDER_REVIEW',
+          status: 'REFERRED_BACK',
+          current_stage: 'REFERRED_BACK',
           managerNote: sendBackNote,
+          finalDecision: {
+            decision: 'REFER_BACK',
+            reasons: analysisReasons,
+            comment: sendBackNote,
+            role: 'MANAGER',
+            createdAt: new Date().toISOString(),
+          },
           updatedAt: serverTimestamp(),
         });
       }
-      await recordWorkflowHistory(application.id, application.current_stage || 'FINAL_DECISION', 'UNDER_REVIEW', `SEND_BACK: ${sendBackNote}`);
+      await recordWorkflowHistory(application.id, normalizeApplicationStage(application.current_stage, application.status), 'REFERRED_BACK', `SEND_BACK: ${sendBackNote}`);
       toast.success('Application returned to review.');
       return true;
     } catch (error) {
@@ -4101,6 +5033,10 @@ function ManagerDashboardView({
       onApprove={handleManagerApprove}
       onReject={handleManagerReject}
       onSendBack={handleManagerSendBack}
+      activeTab={activeTab}
+      onTabChange={onTabChange}
+      managerNote={managerNote}
+      setManagerNote={setManagerNote}
     />
   );
 }
@@ -4117,6 +5053,10 @@ function ManagerCommandCenter({
   onApprove,
   onReject,
   onSendBack,
+  activeTab,
+  onTabChange,
+  managerNote,
+  setManagerNote,
 }: {
   clients: any[],
   loans: any[],
@@ -4129,11 +5069,13 @@ function ManagerCommandCenter({
   onApprove: (application: any, productId: string, note: string, override?: boolean) => Promise<boolean>,
   onReject: (application: any, note: string) => Promise<boolean>,
   onSendBack: (application: any, note: string) => Promise<boolean>,
+  activeTab: 'overview' | 'decision' | 'portfolio' | 'risk' | 'reports' | 'audit';
+  onTabChange: (tab: any) => void;
+  managerNote: string;
+  setManagerNote: (v: string) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'decision' | 'portfolio' | 'risk' | 'reports' | 'audit'>('overview');
   const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
   const [riskFilter, setRiskFilter] = useState<'ALL' | 'HIGH' | 'MEDIUM' | 'LOW'>('ALL');
-  const [managerNote, setManagerNote] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
 
   const finStats = calculateFinancialStats(transactions);
@@ -4143,19 +5085,18 @@ function ManagerCommandCenter({
   const defaultedLoans = loans.filter(loan => loan.status === 'DEFAULTED');
   const activeLoans = loans.filter(loan => loan.status === 'ACTIVE');
   const todayApprovals = applications.filter(app => {
-    if (app.status !== 'APPROVED') return false;
+    if (normalizeApplicationStage(app.current_stage, app.status) !== 'APPROVED') return false;
     return formatDateLabel(app.approvedAt || app.updatedAt) === formatDateLabel(new Date());
   }).length;
 
   const queue = applications
-    .filter(app => app.status !== 'APPROVED' && app.status !== 'REJECTED')
-    .filter(app => ['FINAL_DECISION', 'ANALYSIS', 'UNDER_REVIEW'].includes(app.current_stage || 'SUBMITTED'))
+    .filter(app => normalizeApplicationStage(app.current_stage, app.status) === 'ANALYZED')
     .map(app => {
       const created = getTimestampDate(app.updatedAt || app.createdAt);
       const waitHours = created ? Math.max(1, Math.round((Date.now() - created.getTime()) / (1000 * 60 * 60))) : 0;
       const riskLevel = app.crb?.riskLevel || ((app.crb?.score || 0) < 450 ? 'HIGH' : (app.crb?.score || 0) < 620 ? 'MEDIUM' : 'LOW');
       const riskRank = riskLevel === 'HIGH' ? 3 : riskLevel === 'MEDIUM' ? 2 : 1;
-      const analystRecommendation = String(app.analystRecommendation || app.recommendation || (app.current_stage === 'FINAL_DECISION' ? 'READY FOR MANAGER' : 'PENDING ANALYST')).toUpperCase();
+      const analystRecommendation = String(app.analysis?.decision || app.analystRecommendation || app.recommendation || 'PENDING ANALYST').toUpperCase();
       return {
         ...app,
         clientLabel: getApplicationClientLabel(app, clients),
@@ -4215,7 +5156,7 @@ function ManagerCommandCenter({
         nplCount={portStats.nplCount}
         todayApprovals={todayApprovals}
         activeTab={activeTab}
-        onTabChange={setActiveTab}
+        onTabChange={onTabChange}
         onNavigate={onNavigate}
         selectedApp={selectedApp}
         onRiskFilterToggle={() => setRiskFilter(prev => prev === 'ALL' ? 'HIGH' : 'ALL')}
@@ -4267,7 +5208,7 @@ function buildManagerPortfolioTrend(loans: any[], transactions: any[]) {
 
 function buildManagerAlerts(applications: any[], defaultedLoans: any[], portStats: any) {
   return [
-    { id: 'high-risk', tone: 'critical', text: `${applications.filter(app => app.current_stage === 'FINAL_DECISION' && app.crb?.riskLevel === 'HIGH').length} high-risk loans awaiting decision` },
+    { id: 'high-risk', tone: 'critical', text: `${applications.filter(app => normalizeApplicationStage(app.current_stage, app.status) === 'ANALYZED' && app.crb?.riskLevel === 'HIGH').length} high-risk loans awaiting decision` },
     { id: 'overdue', tone: defaultedLoans.length > 0 ? 'critical' : 'healthy', text: `${defaultedLoans.length} overdue loans require attention today` },
     { id: 'par', tone: portStats.parRatio > 10 ? 'critical' : portStats.parRatio > 5 ? 'warning' : 'healthy', text: `PAR is ${portStats.parRatio.toFixed(1)}%` },
   ];
@@ -4290,43 +5231,53 @@ function getManagerDecisionImpact(application: any, portStats: any, expectedReve
 }
 
 function ManagerHero({ activeLoans, totalDisbursed, outstanding, parRatio, nplCount, todayApprovals, activeTab, onTabChange, onNavigate, selectedApp, onRiskFilterToggle, selectedProductId, managerNote, onApprove, onReject, onSendBack }: any) {
-  const tabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'decision', label: 'Decision Queue' },
-    { id: 'portfolio', label: 'Portfolio' },
-    { id: 'risk', label: 'Risk Control' },
-    { id: 'reports', label: 'Reports' },
-    { id: 'audit', label: 'Audit' },
-  ];
   const canSubmitDecision = Boolean(selectedApp);
   const canApprove = Boolean(selectedApp && selectedProductId);
 
   return (
-    <div className="rounded-[28px] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(32,140,162,0.16),_transparent_38%),linear-gradient(135deg,#f8fafc_0%,#eef6f7_50%,#ffffff_100%)] p-6 shadow-sm">
-      <div className="flex flex-col gap-6">
-        <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.35em] text-brand-600">Manager Dashboard</p>
-            <h2 className="text-3xl font-black tracking-tight text-slate-950">Management Control Room</h2>
-            <p className="text-sm text-slate-600 mt-2 max-w-3xl">The manager does not analyze everything. The manager decides, overrides, and monitors risk at scale.</p>
+    <div className="rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(32,140,162,0.18),_transparent_40%),linear-gradient(135deg,#f8fafc_0%,#f1f5f9_100%)] p-8 shadow-xl shadow-brand-950/5 relative overflow-hidden group">
+      {/* Decorative backdrop elements */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-brand-400/5 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-brand-400/10 transition-colors duration-700" />
+      
+      <div className="flex flex-col gap-8 relative z-10">
+        <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-6 pb-6 border-b border-white/50">
+          <div className="space-y-1">
+            <p className="text-[10px] font-black uppercase tracking-[0.4em] text-brand-600 mb-2 px-3 py-1 bg-brand-100/50 rounded-full inline-block">Management Terminal</p>
+            <h2 className="text-4xl font-black tracking-tight text-slate-950">Console Center</h2>
+            <p className="text-sm font-medium text-slate-500 max-w-2xl leading-relaxed">Decision-first logic engine. Monitor portfolio health, override risk parameters, and authorize capital flow.</p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-            <StatCard title="Active Loans" value={String(activeLoans)} trend="Portfolio in force" />
-            <StatCard title="Total Disbursed" value={formatCurrency(totalDisbursed)} trend="Historic lending" />
-            <StatCard title="Outstanding" value={formatCurrency(outstanding)} trend="Recoverable balance" />
-            <StatCard title="PAR %" value={`${parRatio.toFixed(1)}%`} trend={parRatio > 10 ? 'Threshold breached' : 'Healthy portfolio'} highlight={parRatio > 10} />
-            <StatCard title="NPL Count" value={String(nplCount)} trend="Non-performing watch" highlight={nplCount > 0} />
-            <StatCard title="Today's Approvals" value={String(todayApprovals)} trend="Manager decisions" />
+          <div className="flex items-center gap-3">
+             <div className="text-right hidden sm:block">
+               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Station</p>
+               <p className="text-sm font-black text-slate-900">OPERATIONS CONTROL</p>
+             </div>
+             <div className="h-10 w-10 rounded-2xl bg-slate-950 flex items-center justify-center text-white shadow-lg rotate-3">
+               <ShieldCheck size={20} />
+             </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 rounded-2xl bg-slate-900/95 p-2">
-          {tabs.map(tab => (
-            <button key={tab.id} onClick={() => onTabChange(tab.id)} className={`rounded-xl px-4 py-2 text-xs font-black uppercase tracking-[0.18em] transition-all ${activeTab === tab.id ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-300 hover:text-white'}`}>
-              {tab.label}
-            </button>
-          ))}
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+          <StatCard title="Active Units" value={String(activeLoans)} trend="Active Portfolio" icon={<Briefcase size={14}/>} />
+          <StatCard title="Capital Deployed" value={formatCurrency(totalDisbursed)} trend="Total Disbursement" icon={<ArrowUpRight size={14}/>} />
+          <StatCard title="Recovery Target" value={formatCurrency(outstanding)} trend="Outstanding Capital" icon={<TrendingUp size={14}/>} />
+          <StatCard 
+            title="PAR Index" 
+            value={`${parRatio.toFixed(1)}%`} 
+            trend={parRatio > 10 ? 'CRITICAL LIMIT' : 'HEALTHY STATUS'} 
+            highlight={parRatio > 10}
+            icon={<AlertCircle size={14}/>}
+          />
+          <StatCard 
+            title="NPL Incident" 
+            value={String(nplCount)} 
+            trend="Under observation" 
+            highlight={nplCount > 0}
+            icon={<ShieldAlert size={14}/>} 
+          />
+          <StatCard title="Daily Quota" value={String(todayApprovals)} trend="Today's Approvals" icon={<CheckCircle2 size={14}/>} />
         </div>
+
 
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 rounded-2xl border border-slate-200 bg-white/80 p-4 backdrop-blur-sm">
           <div>
@@ -4486,8 +5437,11 @@ function ManagerDecisionTab({ queue, selectedApp, selectedProductId, setSelected
                 <Badge className={`border ${app.riskLevel === 'HIGH' ? 'border-red-200 bg-red-50 text-red-700' : app.riskLevel === 'MEDIUM' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>{app.riskLevel}</Badge>
               </div>
               <div className={`mt-3 flex items-center justify-between text-[11px] ${selectedApp?.id === app.id ? 'text-slate-300' : 'text-slate-500'}`}>
-                <span>{app.analystRecommendation}</span>
-                <span>{app.waitHours}h waiting</span>
+                <div className="flex items-center gap-2">
+                  <div className={`h-1.5 w-1.5 rounded-full ${app.analysis?.decision === 'APPROVE' ? 'bg-emerald-400' : app.analysis?.decision === 'REJECT' ? 'bg-red-400' : 'bg-amber-400'}`} />
+                  <span className="font-bold uppercase tracking-widest">{app.analysis?.decision || 'PENDING ANALYSIS'}</span>
+                </div>
+                <span>{app.waitHours || 0}h waiting</span>
               </div>
             </button>
           ))}
@@ -4507,10 +5461,44 @@ function ManagerDecisionTab({ queue, selectedApp, selectedProductId, setSelected
                 <p className="text-lg font-black text-slate-900 mt-2">{selectedApp.clientLabel}</p>
                 <p className="text-sm text-slate-500 mt-1">{formatCurrency(selectedApp.requestedAmount || 0)} over {selectedApp.termMonths || 0} months</p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-4">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Analyst Recommendation</p>
-                <p className="text-lg font-black text-slate-900 mt-2">{selectedApp.analystRecommendation}</p>
-                <p className="text-sm text-slate-500 mt-1">{selectedApp.current_stage?.replace(/_/g, ' ') || 'SUBMITTED'}</p>
+              <div className={`rounded-xl p-4 border transition-all ${
+                selectedApp.analysis?.decision === 'REJECT' ? 'bg-red-50 border-red-100' : 
+                selectedApp.analysis?.decision === 'APPROVE' ? 'bg-emerald-50 border-emerald-100' : 
+                'bg-slate-50 border-slate-200'
+              }`}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Analyst Recommendation</p>
+                    <p className={`text-lg font-black mt-1 ${
+                      selectedApp.analysis?.decision === 'REJECT' ? 'text-red-700' : 
+                      selectedApp.analysis?.decision === 'APPROVE' ? 'text-emerald-700' : 
+                      'text-slate-900'
+                    }`}>
+                      {selectedApp.analysis?.decision || 'Analysis Pending'}
+                    </p>
+                  </div>
+                  {selectedApp.analysis?.analystName && (
+                    <span className="text-[9px] font-black uppercase bg-white/50 px-2 py-1 rounded-md text-slate-400 border border-slate-100">
+                      BY: {selectedApp.analysis.analystName}
+                    </span>
+                  )}
+                </div>
+                
+                {selectedApp.analysis?.reasons && (
+                  <div className="flex flex-wrap gap-1 mt-3">
+                    {selectedApp.analysis.reasons.map((reason: string) => (
+                      <span key={reason} className="text-[8px] font-black uppercase tracking-widest bg-white px-2 py-0.5 rounded border border-slate-100 text-slate-500">
+                        {reason}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                
+                {selectedApp.analysis?.comment && (
+                  <p className="text-[10px] text-slate-500 mt-3 italic line-clamp-2 border-t border-slate-100 pt-2">
+                    "{selectedApp.analysis.comment}"
+                  </p>
+                )}
               </div>
             </div>
 
@@ -4539,10 +5527,48 @@ function ManagerDecisionTab({ queue, selectedApp, selectedProductId, setSelected
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <Button className="bg-emerald-600 hover:bg-emerald-700 text-white font-black" onClick={() => onApprove(selectedApp, selectedProductId, managerNote, false)} disabled={!canApprove}>FINAL APPROVE</Button>
-              <Button variant="outline" className="font-black border-red-200 text-red-600" onClick={() => onReject(selectedApp, managerNote)}>FINAL REJECT</Button>
+              <Button 
+                aria-label="Approve Application"
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-black" 
+                onClick={() => {
+                  if (selectedApp.analysis?.decision === 'REJECT' && !managerNote) {
+                    toast.error("Override Protocol: You are approving a loan rejected by the Analyst. A justification note is mandatory.");
+                    return;
+                  }
+                  onApprove(selectedApp, selectedProductId, managerNote, false);
+                }} 
+                disabled={!canApprove}
+              >
+                Approve Application
+              </Button>
+              <Button 
+                variant="outline" 
+                className="font-black border-red-200 text-red-600" 
+                onClick={() => {
+                  if (selectedApp.analysis?.decision === 'APPROVE' && !managerNote) {
+                    toast.error("Override Protocol: You are rejecting a loan approved by the Analyst. A justification note is mandatory.");
+                    return;
+                  }
+                  onReject(selectedApp, managerNote);
+                }}
+              >
+                FINAL REJECT
+              </Button>
               <Button variant="outline" className="font-black border-slate-200 text-slate-700" onClick={() => onSendBack(selectedApp, managerNote)}>Send Back</Button>
-              <Button variant="outline" className="font-black border-amber-200 text-amber-700 md:col-span-3" onClick={() => onApprove(selectedApp, selectedProductId, managerNote, true)} disabled={!canApprove}>Override & Approve</Button>
+              <Button 
+                variant="outline" 
+                className="font-black border-amber-200 text-amber-700 md:col-span-3" 
+                onClick={() => {
+                  if (!managerNote) {
+                    toast.error("Manual Override Justification Required: Provide rationale to bypass standard protocol.");
+                    return;
+                  }
+                  onApprove(selectedApp, selectedProductId, managerNote, true);
+                }} 
+                disabled={!canApprove}
+              >
+                Override & Approve
+              </Button>
             </div>
           </div>
         ) : (
@@ -4809,7 +5835,7 @@ function AdminDashboardView({
   const defaultRate = loans.length > 0 ? (loans.filter(l => l.status === 'DEFAULTED').length / loans.length) * 100 : 0;
   const activeStaff = users.filter(u => u.role === 'AGENT' || u.role === 'OFFICER').length;
   const pendingAgents = users.filter(u => u.role === 'AGENT' && normalizeUserStatus(u.status) === 'PENDING');
-  const pendingApps = applications.filter(a => a.status === 'SUBMITTED' || a.status === 'IN_REVIEW');
+  const pendingApps = applications.filter(a => normalizeApplicationStage(a.current_stage, a.status) === 'PENDING');
   const activeLoans = loans.filter(l => l.status === 'ACTIVE').length;
   const repaymentRate = totalDisbursed > 0 ? (totalCollected / totalDisbursed) * 100 : 0;
   const kycReadyClients = clients.filter(client => client.idNumber || client.personalInfo?.idNumber).length;
@@ -5295,6 +6321,536 @@ function AlertItem({ type, title, description, action }: any) {
   );
 }
 
+function CreditAnalystDashboardView({
+  applications,
+  clients,
+  loans,
+  onNavigate,
+  handleStageTransition,
+  fetchCRBReport,
+  handleSaveManualCRB,
+}: {
+  applications: any[],
+  clients: any[],
+  loans: any[],
+  onNavigate: (view: View) => void,
+  handleStageTransition: (app: any, stage: LoanStage, comment: string, analysisData?: any) => Promise<boolean>,
+  fetchCRBReport: (app: any) => Promise<any>,
+  handleSaveManualCRB: (app: any, score: number, summary: string) => Promise<void>,
+}) {
+  const [activeTab, setActiveTab] = useState<'overview' | 'applications' | 'risk' | 'reports'>('overview');
+  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<{title: string, value: string} | null>(null);
+  
+  // Decision Engine State
+  const [recommendation, setRecommendation] = useState<'APPROVE' | 'REJECT' | 'REFER_BACK' | null>(null);
+  const [selectedReasons, setSelectedReasons] = useState<string[]>([]);
+  const [analystComment, setAnalystComment] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const pendingAnalysis = applications.filter(app => normalizeApplicationStage(app.current_stage, app.status) === 'REVIEWED');
+  const highRiskCount = applications.filter(app => (app.crb?.score || 0) < 450).length;
+
+  const queue = applications
+    .filter(app => normalizeApplicationStage(app.current_stage, app.status) === 'REVIEWED')
+    .map(app => {
+      const sla = calculateSLA(app);
+      return {
+        ...app,
+        clientLabel: app.clientSnapshot?.name || clients.find(c => c.id === app.clientId)?.name || 'Unknown Client',
+        riskLevel: (app.crb?.score || 0) < 450 ? 'HIGH' : (app.crb?.score || 0) < 620 ? 'MEDIUM' : 'LOW',
+        sla
+      };
+    })
+    .sort((a, b) => {
+       // Priority sorting: SLA violation first, then high risk, then high amount
+       if (a.sla.status === 'VIOLATED' && b.sla.status !== 'VIOLATED') return -1;
+       if (a.sla.status !== 'VIOLATED' && b.sla.status === 'VIOLATED') return 1;
+       if (a.riskLevel === 'HIGH' && b.riskLevel !== 'HIGH') return -1;
+       return (b.requestedAmount || 0) - (a.requestedAmount || 0);
+    });
+
+  const selectedApp = queue.find(app => app.id === selectedAppId) || null;
+
+  const reasonOptions = {
+    APPROVE: ['Strong income', 'Low CRB risk', 'Stable employment', 'Meets criteria'],
+    REJECT: ['High CRB risk', 'Insufficient income', 'High obligations', 'Poor history', 'Identity mismatch'],
+    REFER_BACK: ['Missing documents', 'Incorrect data', 'Need clarification', 'Invalid collateral proof']
+  };
+
+  const handleDecisionSubmit = async () => {
+    if (!selectedApp || !recommendation) return;
+    if (selectedReasons.length === 0) {
+      toast.error('Institutional Protocol: You must select at least one reason for your recommendation.');
+      return;
+    }
+    if (analystComment.trim().length < 10) {
+      toast.error('Detailed rationale is required for analyst decisions (min 10 chars).');
+      return;
+    }
+
+    setIsSubmitting(true);
+    const analysisData = {
+      decision: recommendation === 'APPROVE' ? 'RECOMMEND_APPROVE' : recommendation === 'REJECT' ? 'RECOMMEND_REJECT' : 'REFER_BACK',
+      reasons: selectedReasons,
+      comment: analystComment,
+      status: 'ANALYZED'
+    };
+
+    const success = await handleStageTransition(selectedApp, recommendation === 'REFER_BACK' ? 'REFERRED_BACK' : 'ANALYZED', analystComment, analysisData);
+    if (success) {
+      toast.success(recommendation === 'REFER_BACK'
+        ? `Application for ${selectedApp.clientLabel} sent back for correction.`
+        : `Handoff complete: analysis for ${selectedApp.clientLabel} forwarded to Manager.`);
+      setSelectedAppId(null);
+      setRecommendation(null);
+      setSelectedReasons([]);
+      setAnalystComment('');
+      setActiveTab('overview');
+    }
+    setIsSubmitting(false);
+  };
+
+  const calculateDTI = (income: number, amount: number, term: number) => {
+     const monthlyRepayment = amount / term; // Simple approximation
+     return ((monthlyRepayment / income) * 100).toFixed(1);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 pb-20">
+      {/* Station Header */}
+      <div className="rounded-[2.5rem] border border-slate-200 bg-white p-8 shadow-sm">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-2 bg-blue-50 px-3 py-1 rounded-full border border-blue-100">
+              <ShieldCheck size={12} className="text-blue-600" />
+              <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">Credit Analyst Station Alpha</span>
+            </div>
+            <h2 className="text-3xl font-black tracking-tight text-slate-900">Risk Assessment Terminal</h2>
+            <p className="text-sm text-slate-500 font-medium">Verify identity, analyze capacity, and commit institutional recommendations.</p>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard title="Total Queue" value={String(queue.length)} trend="Live Registry" />
+            <StatCard title="High Risk" value={String(highRiskCount)} trend="Bureau Alert" highlight={highRiskCount > 0} />
+            <StatCard title="SLA Violations" value={String(queue.filter(a => a.sla.status === 'VIOLATED').length)} trend="Overdue" highlight={queue.some(a => a.sla.status === 'VIOLATED')} />
+            <StatCard title="Efficiency" value="94%" trend="Avg. Cycle" />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 mt-8 p-1.5 bg-slate-100/50 rounded-2xl w-fit">
+          {(['overview', 'applications', 'risk', 'reports'] as const).map(tab => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              {tab === 'applications' ? 'Work Queue' : tab}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {activeTab === 'overview' && (
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <Card className="xl:col-span-2 p-8 rounded-[2.5rem] border-slate-200 bg-white">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h3 className="text-base font-black text-slate-900">Priority Analysis Queue</h3>
+                <p className="text-xs text-slate-500 font-medium mt-1">Applications sorted by SLA breach risk and impact.</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setActiveTab('applications')} className="rounded-xl font-bold">Launch Full Queue</Button>
+            </div>
+            <div className="space-y-4">
+              {queue.slice(0, 5).map(app => (
+                <div 
+                  key={app.id} 
+                  onClick={() => { setSelectedAppId(app.id); setActiveTab('applications'); }}
+                  className="group relative flex items-center justify-between p-5 rounded-3xl border border-slate-50 hover:border-blue-100 hover:bg-blue-50/30 transition-all cursor-pointer overflow-hidden"
+                >
+                  <div className={`absolute top-0 left-0 bottom-0 w-1 ${app.sla.color}`} />
+                  <div className="flex items-center gap-5">
+                    <div className={`h-12 w-12 rounded-2xl flex items-center justify-center font-black text-sm ${app.riskLevel === 'HIGH' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'}`}>
+                      {app.clientLabel.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="text-base font-black text-slate-900">{app.clientLabel}</p>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest leading-none">{app.id.slice(-8)}</span>
+                        <Badge variant="outline" className={`border-none font-black text-[9px] leading-none h-4 ${app.riskLevel === 'HIGH' ? 'text-red-500' : 'text-slate-400'}`}>{app.riskLevel} RISK</Badge>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-black text-slate-900">{formatCurrency(app.requestedAmount || 0)}</p>
+                    <div className="flex items-center justify-end gap-2 mt-1">
+                       <Clock size={10} className={app.sla.color.replace('bg-', 'text-')} />
+                       <span className={`text-[10px] font-black uppercase tracking-wider ${app.sla.color.replace('bg-', 'text-')}`}>{app.sla.text}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          <div className="space-y-6">
+            <Card className="p-8 rounded-[2.5rem] border-slate-200 bg-white">
+               <h3 className="text-sm font-black uppercase tracking-widest text-slate-400 mb-6">SLA Performance</h3>
+               <div className="flex flex-col items-center py-4">
+                  <div className="relative w-32 h-32 flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90">
+                      <circle cx="64" cy="64" r="50" fill="transparent" stroke="#f1f5f9" strokeWidth="12" />
+                      <circle cx="64" cy="64" r="50" fill="transparent" stroke="#10b981" strokeWidth="12" strokeDasharray="314" strokeDashoffset="31.4" strokeLinecap="round" />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-black text-slate-900">90%</span>
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">On Track</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-8 w-full mt-10">
+                    <div className="text-center">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Avg Cycle</p>
+                      <p className="text-lg font-black text-slate-900">4.2h</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Throughput</p>
+                      <p className="text-lg font-black text-slate-900">12/day</p>
+                    </div>
+                  </div>
+               </div>
+            </Card>
+            
+            <AlertItem 
+              type="danger" 
+              title="Identity Conflict Alert" 
+              description="System detected multiple National IDs linked to a single biometric signature (simulated)."
+              action="Run Deep Veracity Scan"
+            />
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'applications' && (
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Master Queue List */}
+          <Card className="lg:col-span-1 p-6 rounded-[2.5rem] border-slate-200 bg-white shadow-none h-[800px] flex flex-col">
+            <div className="mb-6 space-y-4">
+              <h3 className="text-sm font-black uppercase tracking-widest text-slate-400">Institutional Queue</h3>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                <input 
+                  type="text" 
+                  placeholder="Scan Reference / Name..." 
+                  className="w-full h-10 pl-10 pr-4 rounded-xl border border-slate-100 bg-slate-50 text-xs font-bold focus:bg-white transition-all ring-0 focus:ring-2 focus:ring-blue-100"
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+              {queue.map(app => (
+                <div 
+                  key={app.id} 
+                  onClick={() => setSelectedAppId(app.id)}
+                  className={`p-4 rounded-2xl cursor-pointer border-2 transition-all relative overflow-hidden ${selectedAppId === app.id ? 'bg-slate-950 border-slate-950 text-white shadow-2xl' : 'bg-white border-slate-50 hover:border-blue-100 text-slate-600'}`}
+                >
+                  <div className={`absolute top-0 left-0 bottom-0 w-1 ${app.sla.color}`} />
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-start">
+                       <span className={`text-[9px] font-black uppercase tracking-widest ${selectedAppId === app.id ? 'text-blue-400' : 'text-slate-400'}`}>{app.id.slice(-8)}</span>
+                       <span className={`text-[8px] font-black uppercase ${app.sla.color.replace('bg-', 'text-')}`}>{app.sla.hours.toFixed(0)}h elapsed</span>
+                    </div>
+                    <p className="text-sm font-black leading-tight uppercase tracking-tight truncate">{app.clientLabel}</p>
+                    <div className="flex justify-between items-center bg-white/5 p-2 rounded-lg mt-2">
+                      <p className="text-[10px] font-black">{formatCurrency(app.requestedAmount || 0)}</p>
+                      <Badge className={`border-none text-[8px] font-bold ${app.riskLevel === 'HIGH' ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'}`}>{app.riskLevel}</Badge>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+
+          {/* Analysis Workspace */}
+          <div className="lg:col-span-3">
+            {selectedApp ? (
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} key={selectedApp.id} className="space-y-6">
+                {/* 1. Identity & Context Ribbon */}
+                <Card className="p-8 rounded-[2.5rem] border-slate-200 bg-white relative overflow-hidden">
+                  <div className="flex justify-between items-start z-10 relative">
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-black text-blue-600 uppercase tracking-widest flex items-center gap-2">
+                        <Terminal size={12} /> Institutional Analysis Stage: {selectedApp.current_stage || 'PENDING'}
+                      </p>
+                      <h3 className="text-4xl font-black text-slate-950 tracking-tighter">{selectedApp.clientLabel}</h3>
+                      <div className="flex items-center gap-4 mt-2">
+                         <div className="flex items-center gap-1.5 text-slate-500 text-xs font-bold">
+                           <MapPin size={14} className="text-slate-400" /> Blantyre, Malawi
+                         </div>
+                         <div className="flex items-center gap-1.5 text-slate-500 text-xs font-bold">
+                           <Calendar size={14} className="text-slate-400" /> Client since {new Date(selectedApp.createdAt).getFullYear()}
+                         </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Exposure Required</p>
+                       <p className="text-3xl font-black text-slate-900 tracking-tighter">{formatCurrency(selectedApp.requestedAmount || 0)}</p>
+                       <p className="text-xs text-slate-500 font-bold mt-1">Duration: {selectedApp.termMonths} Months</p>
+                    </div>
+                  </div>
+                  <div className="absolute top-0 right-0 w-80 h-80 bg-blue-50 rounded-full -mr-40 -mt-40 blur-[80px] opacity-40"></div>
+                </Card>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                  {/* Left Column: Intelligence Panels */}
+                  <div className="space-y-6">
+                    {/* A. Financial Capacity Panel */}
+                    <Card className="p-8 rounded-[2.5rem] border-slate-200 bg-white">
+                      <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Financial Capacity Analytics</h4>
+                      <div className="grid grid-cols-2 gap-10">
+                        <div className="space-y-8">
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Monthly Income (Verified)</p>
+                            <p className="text-2xl font-black text-slate-900">{formatCurrency(selectedApp.monthlyIncome || 0)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Debt-to-Income (DTI)</p>
+                            <div className="flex items-end gap-2">
+                              <p className="text-2xl font-black text-slate-900">{calculateDTI(selectedApp.monthlyIncome || 1, selectedApp.requestedAmount || 0, selectedApp.termMonths || 1)}%</p>
+                              <span className="text-[10px] font-bold text-emerald-600 mb-1">HEALTHY</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-8">
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Bureau Risk Score</p>
+                            <div className="h-10 flex items-center">
+                              {selectedApp.crb?.score ? (
+                                <p className="text-3xl font-black text-blue-600 tracking-tighter">{selectedApp.crb.score}</p>
+                              ) : (
+                                <button className="text-xs font-black uppercase text-blue-600 underline" onClick={() => fetchCRBReport(selectedApp)}>Run Bureau Sync</button>
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Repayment Cap</p>
+                            <p className="text-2xl font-black text-slate-900">{formatCurrency((selectedApp.monthlyIncome || 0) * 0.4)}</p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Interactive Visual */}
+                      <div className="mt-8 p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Capacity Utilization Strip</p>
+                        <div className="h-4 w-full bg-slate-200 rounded-full flex overflow-hidden">
+                           <div className="h-full bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.4)]" style={{ width: `${calculateDTI(selectedApp.monthlyIncome || 1, selectedApp.requestedAmount || 0, selectedApp.termMonths || 1)}%` }} />
+                        </div>
+                        <div className="flex justify-between mt-3">
+                           <span className="text-[10px] font-bold text-slate-400 italic">Installment Impact</span>
+                           <span className="text-[10px] font-bold text-slate-900 uppercase">Max Capability: 40%</span>
+                        </div>
+                      </div>
+                    </Card>
+
+                    {/* B. Documentation Inspector */}
+                    <Card className="p-8 rounded-[2.5rem] border-slate-200 bg-white">
+                      <h4 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] mb-6">Master Documentation Artifacts</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        {[
+                          { key: 'idFront', title: 'National ID (Front)' },
+                          { key: 'idBack', title: 'National ID (Back)' },
+                          { key: 'passportPhoto', title: 'Biometric Reference' },
+                          { key: 'proofOfResidence', title: 'Institutional Residence Proof' }
+                        ].map(doc => (
+                          <div 
+                            key={doc.key} 
+                            onClick={() => { setPreviewDoc({title: doc.title, value: (selectedApp as any)[doc.key]}); setIsPreviewModalOpen(true); }}
+                            className="group relative h-32 rounded-3xl bg-slate-50 border border-slate-100 flex flex-col items-center justify-center p-4 hover:border-blue-200 hover:bg-blue-50/50 transition-all cursor-pointer"
+                          >
+                             <div className="h-10 w-10 rounded-full bg-white flex items-center justify-center text-slate-300 group-hover:text-blue-500 transition-colors shadow-sm">
+                               <Maximize2 size={16} />
+                             </div>
+                             <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 mt-3">{doc.title}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </div>
+
+                  {/* Right Column: Decision Engine */}
+                  <div className="space-y-6">
+                    <Card className="p-10 rounded-[3rem] border-slate-200 shadow-2xl shadow-blue-900/10 bg-white flex flex-col h-full ring-2 ring-blue-50">
+                      <div className="flex items-center gap-3 mb-8">
+                        <div className="h-10 w-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-500/30">
+                           <Sparkles size={18} />
+                        </div>
+                        <h4 className="text-xl font-black text-slate-900 tracking-tight">Institutional Recommendation</h4>
+                      </div>
+
+                      <div className="space-y-10 flex-1">
+                        {/* Recommendation Selector */}
+                        <div className="space-y-4">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Risk Decision</p>
+                          <div className="grid grid-cols-1 gap-3">
+                            {(['APPROVE', 'REJECT', 'REFER_BACK'] as const).map(mode => (
+                              <button
+                                key={mode}
+                                onClick={() => { setRecommendation(mode); setSelectedReasons([]); }}
+                                className={`h-16 px-6 rounded-2xl border-2 flex items-center justify-between transition-all ${recommendation === mode ? 'border-blue-600 bg-blue-50/50' : 'border-slate-50 hover:border-slate-200'}`}
+                              >
+                                <div className="flex items-center gap-4">
+                                  <div className={`h-3 w-3 rounded-full ${mode === 'APPROVE' ? 'bg-emerald-500' : mode === 'REJECT' ? 'bg-red-500' : 'bg-amber-500'}`} />
+                                  <span className={`text-xs font-black uppercase tracking-widest ${recommendation === mode ? 'text-blue-600' : 'text-slate-600'}`}>
+                                    {mode.replace('_', ' ')}
+                                  </span>
+                                </div>
+                                {recommendation === mode && <CheckCircle2 size={18} className="text-blue-600" />}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Reason Tags */}
+                        {recommendation && (
+                          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Select Justification Tags (Mandatory)</p>
+                            <div className="flex flex-wrap gap-2">
+                              {reasonOptions[recommendation].map(reason => (
+                                <button
+                                  key={reason}
+                                  onClick={() => setSelectedReasons(prev => prev.includes(reason) ? prev.filter(r => r !== reason) : [...prev, reason])}
+                                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${selectedReasons.includes(reason) ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-50 text-slate-400 hover:bg-slate-100'}`}
+                                >
+                                  {reason}
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+
+                        {/* Comment Box */}
+                        <div className="space-y-4">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Analyst Brief / Override Context</p>
+                          <textarea 
+                            value={analystComment}
+                            onChange={(e) => setAnalystComment(e.target.value)}
+                            rows={5}
+                            placeholder="Provide deep rationale for this credit decision. Minimum 10 characters for rejections."
+                            className="w-full rounded-3xl border-2 border-slate-50 bg-slate-50/50 p-6 text-sm font-bold text-slate-700 focus:bg-white focus:border-blue-600 transition-all ring-0 resize-none shadow-inner"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mt-10">
+                        <Button 
+                          onClick={handleDecisionSubmit}
+                          disabled={!recommendation || isSubmitting}
+                          className="w-full h-16 bg-slate-950 hover:bg-blue-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-2xl transition-all flex items-center justify-center gap-3"
+                        >
+                          {isSubmitting ? <Activity size={18} title="analysing" className="animate-spin" /> : <ShieldCheck size={18} />}
+                          Commit Recommendation to Manager
+                        </Button>
+                        <p className="text-center text-[9px] text-slate-400 uppercase font-black tracking-widest mt-4">This action will be logged in the immutable audit trail.</p>
+                      </div>
+                    </Card>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <div className="h-[800px] rounded-[3rem] border-2 border-dashed border-slate-100 flex flex-col items-center justify-center text-slate-300">
+                <Box size={48} className="mb-4 opacity-20" />
+                <p className="font-black uppercase tracking-widest text-[10px]">Select application from queue to begin analysis</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'risk' && (
+        <Card className="p-12 rounded-[3rem] border-slate-200 bg-white flex flex-col items-center justify-center text-center">
+           <div className="w-24 h-24 rounded-[2.5rem] bg-amber-50 flex items-center justify-center text-amber-500 mb-8 border border-amber-100 shadow-xl shadow-amber-500/10">
+              <Zap size={48} />
+           </div>
+           <h3 className="text-4xl font-black text-slate-900 tracking-tighter mb-4">Risk Intelligence Center</h3>
+           <p className="text-slate-500 max-w-sm font-medium">Aggregating real-time portfolio risk distribution and CRB health trends. This module is initializing with your regional data.</p>
+           <div className="grid grid-cols-3 gap-8 mt-12 w-full max-w-2xl">
+              {[
+                { label: 'Avg Portfolio Score', value: '624' },
+                { label: 'Default Probability', value: '4.2%' },
+                { label: 'System Confidence', value: '98.9%' }
+              ].map(stat => (
+                <div key={stat.label} className="p-6 rounded-3xl bg-slate-50 border border-slate-100">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{stat.label}</p>
+                  <p className="text-xl font-black text-slate-900">{stat.value}</p>
+                </div>
+              ))}
+           </div>
+        </Card>
+      )}
+
+      {activeTab === 'reports' && (
+        <Card className="p-12 rounded-[3rem] border-slate-200 bg-white flex flex-col items-center justify-center text-center">
+           <div className="w-24 h-24 rounded-[2.5rem] bg-indigo-50 flex items-center justify-center text-indigo-500 mb-8 border border-indigo-100 shadow-xl shadow-indigo-500/10">
+              <BarChart4 size={48} />
+           </div>
+           <h3 className="text-4xl font-black text-slate-900 tracking-tighter mb-4">Institutional Reports</h3>
+           <p className="text-slate-500 max-w-sm font-medium">Download decision history, analyst performance logs, and risk breakdown charts.</p>
+           <Button className="mt-10 rounded-2xl px-10 h-14 bg-slate-900 text-white font-black uppercase text-xs tracking-widest">Launch Report Generator</Button>
+        </Card>
+      )}
+
+      {/* High-Fidelity Doc Modal */}
+      <AnimatePresence>
+        {isPreviewModalOpen && previewDoc && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+            <motion.div 
+               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+               className="absolute inset-0 bg-slate-950/90 backdrop-blur-sm"
+               onClick={() => setIsPreviewModalOpen(false)}
+            />
+            <motion.div 
+               initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+               className="relative w-full max-w-5xl aspect-[3/2] bg-white rounded-[3rem] shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                <div>
+                   <h4 className="text-lg font-black text-slate-900">{previewDoc.title}</h4>
+                   <p className="text-xs text-slate-500 font-bold tracking-tight">Institutional Artifact Reference</p>
+                </div>
+                <button onClick={() => setIsPreviewModalOpen(false)} className="h-12 w-12 rounded-2xl bg-white flex items-center justify-center text-slate-400 hover:text-slate-950 shadow-sm border border-slate-100 transition-all">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="flex-1 bg-slate-100 flex items-center justify-center p-12 overflow-y-auto">
+                 {previewDoc.value ? (
+                   <img src={previewDoc.value} alt={previewDoc.title} className="max-w-full max-h-full rounded-2xl shadow-2xl border-4 border-white" />
+                 ) : (
+                   <div className="flex flex-col items-center opacity-30">
+                     <FileX2 size={64} className="mb-4" />
+                     <p className="font-black uppercase tracking-widest text-sm text-center">No Artifact Image<br/>Available in Registry</p>
+                   </div>
+                 )}
+              </div>
+              <div className="p-6 bg-white border-t border-slate-100 flex justify-between items-center">
+                 <div className="flex gap-4">
+                    <Button variant="outline" className="rounded-xl font-bold flex gap-2 items-center text-xs">
+                      <Download size={14} /> Download PDF
+                    </Button>
+                    <Button variant="outline" className="rounded-xl font-bold flex gap-2 items-center text-xs">
+                      <Printer size={14} /> Print Artifact
+                    </Button>
+                 </div>
+                 <div className="flex items-center gap-6">
+                    <button className="h-10 w-10 text-slate-400 hover:text-blue-600 transition-colors"><ZoomIn size={20} /></button>
+                    <button className="h-10 w-10 text-slate-400 hover:text-blue-600 transition-colors"><ZoomOut size={20} /></button>
+                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
 function ClientsView({ clients, loans, role }: { clients: any[], loans: any[], role: UserRole }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
@@ -5328,8 +6884,10 @@ function ClientsView({ clients, loans, role }: { clients: any[], loans: any[], r
     >
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-bold tracking-tight">Client Directory</h2>
-          <p className="text-[12px] text-muted-foreground">Manage and monitor institutional client accounts.</p>
+          <h2 className="text-xl font-bold tracking-tight">{role === 'AGENT' ? 'Client Management' : 'Client Directory'}</h2>
+          <p className="text-[12px] text-muted-foreground">
+            {role === 'AGENT' ? 'Manage field clients, confirm contact details, and prepare follow-up visits.' : 'Manage and monitor institutional client accounts.'}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="h-9 px-4 text-xs font-semibold border-border bg-white">
@@ -5870,13 +7428,27 @@ function ApplicationsView({ clients, applications, role, sessionProfile, uploadD
   useEffect(() => {
     try {
       const savedDraft = localStorage.getItem(draftStorageKey);
-      if (!savedDraft) return;
-      const parsed = JSON.parse(savedDraft);
-      setDraft({ ...emptyApplicationDraft(), ...parsed });
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft);
+        setDraft({ ...emptyApplicationDraft(), ...parsed });
+      } else if (role === 'CLIENT' && sessionProfile) {
+        // Initialize draft for logged-in client
+        setDraft(prev => ({
+          ...prev,
+          selectedClientId: sessionProfile.id,
+          firstName: sessionProfile.name?.split(' ')[0] || '',
+          lastName: sessionProfile.name?.split(' ').slice(1).join(' ') || '',
+          email: sessionProfile.email || '',
+          primaryPhone: sessionProfile.phone || '',
+          idNumber: sessionProfile.idNumber || '',
+          mode: 'existing'
+        }));
+        setCurrentStep(2); // Skip Step 1 (Search)
+      }
     } catch (error) {
       console.error('Failed to restore draft', error);
     }
-  }, [draftStorageKey]);
+  }, [draftStorageKey, role, sessionProfile]);
 
   useEffect(() => {
     try {
@@ -6038,7 +7610,7 @@ function ApplicationsView({ clients, applications, role, sessionProfile, uploadD
   const handleSubmit = async () => {
     if (isSubmitting) return;
     if (role === 'CREDIT_ANALYST') {
-      toast.error("Auditors cannot submit applications");
+      toast.error("Credit Analysts cannot submit applications manually via this module.");
       return;
     }
 
@@ -6201,9 +7773,10 @@ function ApplicationsView({ clients, applications, role, sessionProfile, uploadD
         monthlyIncome,
         loanProduct: draft.loanProduct,
         currency: draft.currency,
-        status: 'SUBMITTED',
-        current_stage: 'SUBMITTED' as LoanStage,
+        status: 'PENDING',
+        current_stage: 'PENDING' as LoanStage,
         kycStatus: kycFilesReady ? 'PENDING_REVIEW' : 'MISSING',
+        decisionTrail: [],
         metadata: {
           createdBy,
           registrationDate: serverTimestamp(),
@@ -6270,11 +7843,22 @@ function ApplicationsView({ clients, applications, role, sessionProfile, uploadD
       };
 
       try {
-        await addDoc(collection(db, 'applications'), applicationPayload);
+        const appRef = await addDoc(collection(db, 'applications'), applicationPayload);
+        await updateDoc(doc(db, 'applications', appRef.id), { applicationId: appRef.id });
+        await createNotification(
+          'SYSTEM',
+          'New Loan Application',
+          `Application ${appRef.id.slice(0, 8).toUpperCase()} is pending first review for ${clientSnapshot?.name || 'a client'}.`,
+          'OFFICER',
+          undefined,
+          appRef.id,
+          { slaHours: 24 }
+        );
       } catch (err: any) {
         if (err.code === 'permission-denied' || err.message?.includes('permission')) {
           console.warn('Application submission blocked by permissions. Falling back to Simulation Mode.');
-          saveLocalApplication({ ...applicationPayload, id: `local-app-${Math.random().toString(36).substr(2, 9)}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+          const localAppId = `local-app-${Math.random().toString(36).substr(2, 9)}`;
+          saveLocalApplication({ ...applicationPayload, id: localAppId, applicationId: localAppId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
         } else {
           throw err;
         }
@@ -6298,8 +7882,14 @@ function ApplicationsView({ clients, applications, role, sessionProfile, uploadD
     >
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Client Registration & Loan Application</h2>
-          <p className="text-slate-500 mt-1">Capture client KYC, income, guarantor, documents, and loan details in one guided flow.</p>
+          <h2 className="text-3xl font-bold tracking-tight">
+            {role === 'CLIENT' ? 'Institutional Loan Application' : 'Client Registration & Loan Application'}
+          </h2>
+          <p className="text-slate-500 mt-1">
+            {role === 'CLIENT' 
+              ? 'Complete your financial and employment profile to trigger an automated credit review.' 
+              : 'Capture client KYC, income, guarantor, documents, and loan details in one guided flow.'}
+          </p>
         </div>
         <div className="flex gap-2">
           <Badge className="bg-blue-100 text-blue-700 border-none px-3 py-1 uppercase tracking-widest text-[10px] font-black">
@@ -6824,7 +8414,7 @@ function ApprovalsView({
 }: { 
   applications: any[], 
   role: UserRole, 
-  handleStageTransition: (app: any, stage: LoanStage, comment?: string) => Promise<boolean>,
+  handleStageTransition: (app: any, stage: LoanStage, comment?: string, analysisData?: any) => Promise<boolean>,
   fetchCRBReport: (app: any) => Promise<void>,
   handleSaveManualCRB: (app: any, score: number, summary: string) => Promise<void>,
   loanProducts: LoanProduct[]
@@ -6832,164 +8422,12 @@ function ApprovalsView({
   const [showManualCRB, setShowManualCRB] = useState<string | null>(null);
   const [manualScore, setManualScore] = useState<string>('');
   const [manualSummary, setManualSummary] = useState<string>('');
-  const [selectedProductIds, setSelectedProductIds] = useState<Record<string, string>>({});
-
-  const pendingApps = applications.filter(a => a.status === 'SUBMITTED' || (a.current_stage && a.current_stage !== 'FINAL_DECISION'));
-  const reviewerEmail = getActiveSessionEmail();
-
-  const handleApprove = async (app: any) => {
-    if (role === 'CREDIT_ANALYST') {
-      toast.error("Auditors cannot approve applications");
-      return;
-    }
-
-    const productId = selectedProductIds[app.id];
-    const product = loanProducts.find(p => p.id === productId);
-
-    if (!product) {
-      toast.error("Please select a valid Loan Product before approval");
-      return;
-    }
-
-    try {
-      const approvedAt = serverTimestamp();
-      const clientName = app.clientSnapshot?.name || `Client ${app.clientId?.slice(0, 8)?.toUpperCase() || ''}`.trim();
-      const requestedAmount = app.requestedAmount || 0;
-      const monthlyIncome = app.monthlyIncome || Math.round((app.annualIncome || 0) / 12);
-      const originatingAgentEmail = app.originatingAgentEmail || app.assignedAgentEmail || app.metadata?.createdBy?.email || '';
-
-      // 1. Calculate Charges
-      const appFee = calculateChargeValue(requestedAmount, product.charges.applicationFee);
-      const procFee = calculateChargeValue(requestedAmount, product.charges.processingFee);
-      const totalFees = appFee + procFee;
-      const netDisbursement = requestedAmount - appFee; // Only application fee deducted from cash per request
-
-      // 2. Update Application status
-      await updateDoc(doc(db, 'applications', app.id), {
-        status: 'APPROVED',
-        approvedAt,
-        approvedBy: reviewerEmail || 'system',
-        updatedAt: serverTimestamp(),
-        selectedProductId: productId
-      });
-
-      // 3. Create Loan Record
-      const disbursedAt = serverTimestamp();
-      const loanRef = await addDoc(collection(db, 'loans'), {
-        clientId: app.clientId,
-        applicationId: app.id,
-        productId: productId,
-        productName: product.name,
-        clientName,
-        amount: requestedAmount,
-        outstandingBalance: requestedAmount,
-        interestRate: product.interestRate,
-        status: "ACTIVE",
-        type: product.name,
-        termMonths: app.termMonths || 0,
-        monthlyIncome,
-        nextDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        originatingAgentEmail,
-        assignedAgentEmail: originatingAgentEmail,
-        approvedBy: reviewerEmail || 'system',
-        metadata: {
-          createdBy: app.metadata?.createdBy || null,
-          approvedBy: reviewerEmail || 'system',
-          approvedAt,
-          feesApplied: { appFee, procFee }
-        },
-        disbursedAt,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-
-      // 4. Generate & Save Repayment Schedule
-      const schedule = generateRepaymentSchedule(loanRef.id, requestedAmount, product.interestRate, app.termMonths || 1);
-      const schedulePromises = schedule.map(item => addDoc(collection(db, 'repayment_schedule'), item));
-      await Promise.all(schedulePromises);
-
-      // 5. Record Transactions (Ledger)
-      // Charge Transaction
-      await recordTransaction(
-        loanRef.id, 
-        app.clientId, 
-        'CHARGE', 
-        totalFees, 
-        `FEES-${app.id.slice(0,8)}`, 
-        reviewerEmail, 
-        `Application Fee (${appFee}) + Processing Fee (${procFee})`
-      );
-
-      // Disbursement Transaction (Net amount)
-      await recordTransaction(
-        loanRef.id, 
-        app.clientId, 
-        'DISBURSEMENT', 
-        netDisbursement, 
-        `DISB-${app.id.slice(0,8)}`, 
-        reviewerEmail, 
-        `Disbursement (Requested: ${requestedAmount}, Deducted App Fee: ${appFee})`
-      );
-
-      // Phase 5: Simulate disbursement via MockPaymentService
-      const paymentResult = await MockPaymentService.initiateDisbursement(
-        loanRef.id, netDisbursement, clientName, 'AIRTEL_MONEY'
-      );
-
-      // Phase 5: Loan Approved notification
-      await createNotification(
-        'LOAN_APPROVED',
-        'Loan Approved & Disbursed',
-        `Loan for ${clientName} has been approved. Net disbursement: MWK ${netDisbursement.toLocaleString()} via ${paymentResult.method.replace('_', ' ')}. Ref: ${paymentResult.reference}.`,
-        'ALL',
-        loanRef.id,
-        app.id,
-        { paymentRef: paymentResult.reference }
-      );
-
-      toast.success(`Loan Approved. Disbursement ref: ${paymentResult.reference}`);
-    } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, 'loans/approvals');
-    }
-  };
-
-  const handleReject = async (app: any) => {
-    try {
-      await updateDoc(doc(db, 'applications', app.id), {
-        status: 'REJECTED',
-        updatedAt: serverTimestamp()
-      });
-      // Phase 5: Loan Rejected notification
-      await createNotification(
-        'LOAN_REJECTED',
-        'Loan Application Rejected',
-        `Application for ${app.clientSnapshot?.name || 'Unknown Client'} (MWK ${(app.requestedAmount || 0).toLocaleString()}) has been rejected.`,
-        'ALL',
-        undefined,
-        app.id
-      );
-      toast.success("Application rejected");
-    } catch (e) {
-      handleFirestoreError(e, OperationType.UPDATE, 'applications');
-    }
-  };
+  const pendingApps = applications.filter(a => ['PENDING', 'REVIEWED'].includes(normalizeApplicationStage(a.current_stage, a.status)));
 
   const getWorkflowAction = (app: any) => {
-    const stage = app.current_stage || 'SUBMITTED';
-    if (stage === 'SUBMITTED' && (role === 'OFFICER' || role === 'ADMIN')) {
-      return { label: 'Move to Review', target: 'UNDER_REVIEW' as LoanStage, color: 'bg-amber-600' };
-    }
-    if (stage === 'UNDER_REVIEW' && (role === 'OFFICER' || role === 'ADMIN')) {
-      return { label: 'Initiate CRB', target: 'CRB_CHECK' as LoanStage, color: 'bg-indigo-600' };
-    }
-    if (stage === 'CRB_CHECK' && (role === 'OFFICER' || role === 'CREDIT_ANALYST' || role === 'ADMIN')) {
-      return { label: 'Forward to Analyst', target: 'ANALYSIS' as LoanStage, color: 'bg-blue-600' };
-    }
-    if (stage === 'ANALYSIS' && (role === 'CREDIT_ANALYST' || role === 'ADMIN')) {
-      return { label: 'Send to Manager', target: 'FINAL_DECISION' as LoanStage, color: 'bg-brand-600' };
-    }
-    if (stage === 'FINAL_DECISION' && (role === 'MANAGER' || role === 'ADMIN')) {
-      return { label: 'Final Approval', target: 'APPROVED' as any, color: 'bg-emerald-600' };
+    const stage = normalizeApplicationStage(app.current_stage, app.status);
+    if (stage === 'PENDING' && (role === 'OFFICER' || role === 'ADMIN')) {
+      return { label: 'Review Complete', target: 'REVIEWED' as LoanStage, color: 'bg-amber-600' };
     }
     return null;
   };
@@ -7171,31 +8609,14 @@ function ApprovalsView({
                   if (action) {
                     return (
                       <>
-                        {action.target === 'APPROVED' && (
-                          <div className="w-full mb-3 space-y-1.5">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Select Product</label>
-                            <select 
-                              className="w-full h-9 rounded-md border border-border bg-white px-2 py-1 text-[11px] font-bold focus:outline-none focus:ring-1 focus:ring-brand-500"
-                              value={selectedProductIds[app.id] || ''}
-                              onChange={(e) => setSelectedProductIds({ ...selectedProductIds, [app.id]: e.target.value })}
-                            >
-                              <option value="">-- Choose Product --</option>
-                              {loanProducts.filter(p => p.status === 'ACTIVE').map(p => (
-                                <option key={p.id} value={p.id}>{p.name} ({p.interestRate}%)</option>
-                              ))}
-                            </select>
-                            {loanProducts.filter(p => p.status === 'ACTIVE').length === 0 && (
-                              <p className="text-[9px] text-red-500 font-bold italic">No active products found. Please create one in Settings.</p>
-                            )}
-                          </div>
-                        )}
                         <Button 
                           onClick={() => {
-                            if (action.target === 'APPROVED') {
-                              handleApprove(app);
-                            } else {
-                              handleStageTransition(app, action.target as LoanStage);
-                            }
+                            const comment = window.prompt('Enter review comment / eligibility summary:');
+                            if (!comment) return;
+                            handleStageTransition(app, action.target as LoanStage, comment, {
+                              decision: 'REVIEW',
+                              reasons: ['Application complete', 'Basic eligibility confirmed'],
+                            });
                           }}
                           size="sm"
                           className={`w-full h-9 text-[11px] font-bold text-white ${action.color}`}
@@ -7203,12 +8624,19 @@ function ApprovalsView({
                           {action.label.toUpperCase()}
                         </Button>
                         <Button 
-                          onClick={() => handleReject(app)}
+                          onClick={() => {
+                            const comment = window.prompt('Enter the reason for sending this application back to the client:');
+                            if (!comment) return;
+                            handleStageTransition(app, 'REFERRED_BACK', comment, {
+                              decision: 'REFER_BACK',
+                              reasons: ['Corrections required'],
+                            });
+                          }}
                           variant="outline" 
                           size="sm"
                           className="w-full h-9 text-[11px] font-bold border-border text-muted-foreground hover:bg-white"
                         >
-                          REJECT
+                          REFER BACK
                         </Button>
                       </>
                     );
@@ -7375,6 +8803,158 @@ function RepaymentsView({ loans, role, loanProducts }: { loans: any[], role: Use
           </div>
         </div>
       </div>
+    </motion.div>
+  );
+}
+
+function AgentPaymentCollectionView({
+  loans,
+  clients,
+  onCollect,
+}: {
+  loans: any[],
+  clients: any[],
+  onCollect: (loan: any, amount: number) => Promise<boolean>,
+}) {
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [selectedLoanId, setSelectedLoanId] = useState<string | null>(null);
+  const [amount, setAmount] = useState('');
+  const [step, setStep] = useState<1 | 2>(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successState, setSuccessState] = useState<{ clientName: string; amount: number } | null>(null);
+
+  const collectibleLoans = loans.filter((loan) => (loan.outstandingBalance || 0) > 0);
+  const clientOptions = clients.filter((client) => collectibleLoans.some((loan) => loan.clientId === client.id || loan.clientName === client.name));
+  const selectedLoan = collectibleLoans.find((loan) => loan.id === selectedLoanId) || null;
+
+  const handleContinue = () => {
+    if (!selectedClientId || !selectedLoan) {
+      toast.error('Select a client and loan to continue.');
+      return;
+    }
+    setAmount(String(Math.min(selectedLoan.outstandingBalance || 0, 20000)));
+    setStep(2);
+  };
+
+  const handleConfirm = async () => {
+    if (!selectedLoan) return;
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      toast.error('Enter a valid repayment amount.');
+      return;
+    }
+    setIsSubmitting(true);
+    const success = await onCollect(selectedLoan, numericAmount);
+    setIsSubmitting(false);
+    if (!success) return;
+    setSuccessState({
+      clientName: selectedLoan.clientName || clients.find((client) => client.id === selectedLoan.clientId)?.name || 'Client',
+      amount: numericAmount,
+    });
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6 max-w-5xl">
+      <div>
+        <h2 className="text-2xl font-black tracking-tight text-slate-900">Payment Collection</h2>
+        <p className="text-sm text-slate-500 mt-1">Collect in-person repayments and issue an official receipt immediately.</p>
+      </div>
+
+      {successState && (
+        <Card className="border border-emerald-200 bg-emerald-50 shadow-none rounded-2xl">
+          <CardContent className="p-6">
+            <h3 className="text-xl font-black text-emerald-900">Payment Successful</h3>
+            <p className="text-sm text-emerald-800 mt-2">
+              {successState.clientName} paid {formatCurrency(successState.amount)}. Official Receipt generated.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card className="border border-slate-200 shadow-none rounded-[2rem] bg-white">
+        <CardContent className="p-6 space-y-6">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Step 1: Select Client &amp; Loan</p>
+            <p className="text-sm text-slate-500 mt-2">Pick the borrower first, then choose the exact facility you are collecting against.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em]">Clients</h3>
+              {clientOptions.map((client) => (
+                <button
+                  key={client.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedClientId(client.id);
+                    setSelectedLoanId(null);
+                    setStep(1);
+                    setSuccessState(null);
+                  }}
+                  className={`w-full rounded-2xl border px-4 py-4 text-left transition-colors ${
+                    selectedClientId === client.id ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  <p className="font-black">{client.name}</p>
+                  <p className={`text-xs mt-1 ${selectedClientId === client.id ? 'text-slate-300' : 'text-slate-500'}`}>{client.phone || 'No phone on file'}</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="text-sm font-black text-slate-900 uppercase tracking-[0.2em]">Loans</h3>
+              {collectibleLoans
+                .filter((loan) => !selectedClientId || loan.clientId === selectedClientId || loan.clientName === clients.find((client) => client.id === selectedClientId)?.name)
+                .map((loan) => (
+                  <button
+                    key={loan.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedLoanId(loan.id);
+                      setSuccessState(null);
+                    }}
+                    className={`w-full rounded-2xl border px-4 py-4 text-left transition-colors ${
+                      selectedLoanId === loan.id ? 'border-emerald-600 bg-emerald-50' : 'border-slate-200 hover:bg-slate-50'
+                    }`}
+                  >
+                    <p className="font-black text-slate-900">Loan #{loan.id.slice(0, 8).toUpperCase()}</p>
+                    <p className="text-xs text-slate-500 mt-1">Outstanding {formatCurrency(loan.outstandingBalance || 0)}</p>
+                  </button>
+                ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={handleContinue} className="bg-slate-900 hover:bg-slate-800 text-white font-black" disabled={!selectedClientId || !selectedLoanId}>
+              Continue to Payment
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {step === 2 && selectedLoan && (
+        <Card className="border border-slate-200 shadow-none rounded-[2rem] bg-white">
+          <CardContent className="p-6 space-y-5">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Step 2: Capture Payment</p>
+              <h3 className="text-xl font-black text-slate-900 mt-2">Repayment Amount</h3>
+            </div>
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Repayment Amount</label>
+              <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="h-12 rounded-2xl border-slate-200 font-black text-lg" />
+            </div>
+            <div className="flex justify-between items-center rounded-2xl bg-slate-50 border border-slate-100 px-4 py-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Loan Balance</p>
+                <p className="text-lg font-black text-slate-900 mt-1">{formatCurrency(selectedLoan.outstandingBalance || 0)}</p>
+              </div>
+              <Button onClick={handleConfirm} disabled={isSubmitting} className="bg-emerald-600 hover:bg-emerald-700 text-white font-black">
+                {isSubmitting ? 'Processing...' : 'Confirm Collection'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </motion.div>
   );
 }
@@ -7698,444 +9278,309 @@ function LoanOfficerDashboardView({
   onNavigate: (view: View) => void,
   handleStageTransition: (app: any, stage: LoanStage, comment?: string) => Promise<boolean>
 }) {
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.05 }
+    }
+  };
+
+  const item = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0 }
+  };
+
   const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const pendingApps = applications.filter(a => a.status === 'SUBMITTED' || a.status === 'IN_REVIEW');
   const newApps24h = applications.filter(a => {
     const date = getTimestampDate(a.createdAt);
     return date ? date > last24h : false;
   }).length;
+  
   const activeLoans = loans.filter(loan => loan.status === 'ACTIVE');
   const overdueLoans = loans.filter(loan => loan.status === 'DEFAULTED');
-  const kycCompliant = clients.filter(c => getClientIdNumber(c)).length;
-  const kycRate = clients.length > 0 ? (kycCompliant / clients.length) * 100 : 0;
   const outstandingPortfolio = loans.reduce((sum, loan) => sum + (loan.outstandingBalance || 0), 0);
-  const recentRepayments = transactions
-    .filter(transaction => transaction.type === 'REPAYMENT')
-    .slice(0, 5);
-  const recentDisbursements = transactions
-    .filter(transaction => transaction.type === 'DISBURSEMENT')
-    .slice(0, 5);
-  const collectionThisMonth = transactions
-    .filter(transaction => {
-      const date = getTimestampDate(transaction.timestamp);
-      const now = new Date();
-      return transaction.type === 'REPAYMENT'
-        && date
-        && date.getMonth() === now.getMonth()
-        && date.getFullYear() === now.getFullYear();
-    })
-    .reduce((sum, transaction) => sum + (transaction.amount || 0), 0);
-  const disbursedThisMonth = loans
-    .filter(loan => {
-      const date = getTimestampDate(loan.disbursedAt || loan.createdAt);
-      const now = new Date();
-      return date && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-    })
-    .reduce((sum, loan) => sum + (loan.amount || 0), 0);
+  
+  const highRiskApps = applications.filter(app => 
+    normalizeApplicationStage(app.current_stage, app.status) === 'PENDING' && 
+    ((app.crb?.score || 0) < 450 || (app.requestedAmount || 0) > 300000)
+  ).length;
+
   const averageTicketSize = activeLoans.length > 0
     ? activeLoans.reduce((sum, loan) => sum + (loan.amount || 0), 0) / activeLoans.length
     : 0;
-  const applicationsByStatus = [
-    { name: 'Submitted', value: applications.filter(application => application.status === 'SUBMITTED').length },
-    { name: 'In Review', value: applications.filter(application => application.status === 'IN_REVIEW').length },
-    { name: 'Approved', value: applications.filter(application => application.status === 'APPROVED').length },
-    { name: 'Rejected', value: applications.filter(application => application.status === 'REJECTED').length },
-  ];
-  const officerTrendData = Array.from({ length: 6 }).map((_, index) => {
-    const bucket = new Date();
-    bucket.setDate(1);
-    bucket.setMonth(bucket.getMonth() - (5 - index));
-    const month = bucket.toLocaleDateString(undefined, { month: 'short' });
 
-    const submitted = applications.filter(application => {
-      const date = getTimestampDate(application.createdAt);
-      return date && date.getMonth() === bucket.getMonth() && date.getFullYear() === bucket.getFullYear();
-    }).length;
+  const collectionThisMonth = transactions
+    .filter(t => {
+      const date = getTimestampDate(t.timestamp);
+      const now = new Date();
+      return t.type === 'REPAYMENT' && date && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+    })
+    .reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    const disbursed = loans
-      .filter(loan => {
-        const date = getTimestampDate(loan.disbursedAt || loan.createdAt);
-        return date && date.getMonth() === bucket.getMonth() && date.getFullYear() === bucket.getFullYear();
-      })
-      .reduce((sum, loan) => sum + (loan.amount || 0), 0);
+  const portfolioMix = [
+    { name: 'Commercial', value: loans.filter(l => l.loanProduct === 'Commercial Growth Bridge').length, color: '#208CA2' },
+    { name: 'SME', value: loans.filter(l => l.loanProduct === 'SME Expansion Fund').length, color: '#42DAD9' },
+    { name: 'Personal', value: loans.filter(l => l.loanProduct === 'Personal Asset Loan').length, color: '#0A4969' },
+  ].filter(d => d.value > 0);
 
-    return {
-      month,
-      submitted,
-      disbursed: Math.round(disbursed / 1000),
-    };
-  });
   const riskQueue = pendingApps
-    .map(application => {
-      const income = application.monthlyIncome || Math.round((application.annualIncome || 0) / 12);
-      const exposureRatio = income > 0 ? (application.requestedAmount || 0) / income : 0;
-      return {
-        application,
-        clientName: getApplicationClientLabel(application, clients),
-        exposureRatio,
-        kycStatus: application.kycStatus || 'PENDING_REVIEW',
-      };
-    })
-    .sort((left, right) => right.exposureRatio - left.exposureRatio)
-    .slice(0, 4);
-  const upcomingAttention = loans
-    .filter(loan => (loan.outstandingBalance || 0) > 0)
-    .map(loan => {
-      const client = clients.find(item => item.id === loan.clientId);
-      return {
-        id: loan.id,
-        clientName: client ? getClientName(client) : (loan.clientName || 'Unknown Client'),
-        nextDueDate: loan.nextDueDate || loan.disbursedAt || loan.createdAt,
-        outstandingBalance: loan.outstandingBalance || 0,
-        status: loan.status,
-      };
-    })
-    .sort((left, right) => {
-      const leftDate = getTimestampDate(left.nextDueDate)?.getTime() || Number.MAX_SAFE_INTEGER;
-      const rightDate = getTimestampDate(right.nextDueDate)?.getTime() || Number.MAX_SAFE_INTEGER;
-      return leftDate - rightDate;
-    })
+    .map(app => ({
+      app,
+      clientName: getApplicationClientLabel(app, clients),
+      riskScore: app.crb?.score || 300,
+      amount: app.requestedAmount || 0
+    }))
+    .sort((a, b) => a.riskScore - b.riskScore)
     .slice(0, 5);
 
   return (
     <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-5"
+      variants={container}
+      initial="hidden"
+      animate="show"
+      className="space-y-8 pb-12"
     >
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">Officer Command Center</h2>
-          <p className="text-[12px] text-muted-foreground">Portfolio oversight and application processing.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button 
-            onClick={() => onNavigate('approvals')}
-            className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold gap-2 h-9"
-          >
-            <CheckCircle2 size={16} /> Review Queue
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard 
-          title="Pending Approvals" 
-          value={pendingApps.length.toString()} 
-          trend="Requires immediate review" 
-          icon={<CheckCircle2 className="text-amber-500" size={18} />}
-          iconBg="bg-amber-50"
-        />
-        <StatCard 
-          title="New Apps (24h)" 
-          value={newApps24h.toString()} 
-          trend="Incoming volume" 
-          icon={<FileText className="text-brand-500" size={18} />}
-          iconBg="bg-brand-50"
-        />
-        <StatCard 
-          title="KYC Compliance" 
-          value={`${kycRate.toFixed(1)}%`} 
-          trend="Verified clients" 
-          icon={<Users className="text-emerald-500" size={18} />}
-          iconBg="bg-emerald-50"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="border border-border shadow-none rounded-lg bg-white">
-          <CardContent className="p-5">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Outstanding Portfolio</p>
-            <p className="text-2xl font-bold text-foreground mt-2">{formatCurrency(outstandingPortfolio)}</p>
-            <p className="text-[12px] text-muted-foreground mt-2">{activeLoans.length} active loans being monitored</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-border shadow-none rounded-lg bg-white">
-          <CardContent className="p-5">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Collections This Month</p>
-            <p className="text-2xl font-bold text-foreground mt-2">{formatCurrency(collectionThisMonth)}</p>
-            <p className="text-[12px] text-muted-foreground mt-2">{recentRepayments.length} recent repayment records available</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-border shadow-none rounded-lg bg-white">
-          <CardContent className="p-5">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Disbursed This Month</p>
-            <p className="text-2xl font-bold text-foreground mt-2">{formatCurrency(disbursedThisMonth)}</p>
-            <p className="text-[12px] text-muted-foreground mt-2">{recentDisbursements.length} recent disbursement entries tracked</p>
-          </CardContent>
-        </Card>
-        <Card className="border border-border shadow-none rounded-lg bg-white">
-          <CardContent className="p-5">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Average Ticket Size</p>
-            <p className="text-2xl font-bold text-foreground mt-2">{formatCurrency(averageTicketSize)}</p>
-            <p className="text-[12px] text-muted-foreground mt-2">{overdueLoans.length} overdue or defaulted accounts require follow-up</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Card className="lg:col-span-2 border border-border shadow-none rounded-lg overflow-hidden bg-white">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <h3 className="text-sm font-bold">Priority Review Queue</h3>
-            <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-brand-600" onClick={() => onNavigate('approvals')}>VIEW ALL</Button>
+      {/* Header / Hero Section */}
+      <motion.div variants={item} className="relative overflow-hidden rounded-[2.5rem] bg-slate-900 p-8 lg:p-12 text-white shadow-2xl">
+        <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-brand-500/10 to-transparent pointer-none" />
+        <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-8">
+          <div className="space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 text-[10px] font-black uppercase tracking-[0.2em] text-brand-300 backdrop-blur-md border border-white/10">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-400 animate-pulse" />
+              Real-time Operational Status
+            </div>
+            <h1 className="text-4xl lg:text-5xl font-black tracking-tighter leading-tight italic">
+              OFFICER<br />COMMAND CENTER
+            </h1>
+            <p className="text-slate-400 text-sm max-w-md font-medium leading-relaxed">
+              Managing {activeLoans.length} active facilities with {pendingApps.length} fresh applications in the review pipeline.
+            </p>
           </div>
-          <Table className="text-[12px]">
-            <TableHeader className="bg-[#F9FAFB]">
-              <TableRow className="hover:bg-transparent border-border">
-                <TableHead className="text-muted-foreground font-semibold h-10 px-4">Application</TableHead>
-                <TableHead className="text-muted-foreground font-semibold h-10 px-4">Amount</TableHead>
-                <TableHead className="text-muted-foreground font-semibold h-10 px-4">SLA Status</TableHead>
-                <TableHead className="text-muted-foreground font-semibold h-10 px-4 text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pendingApps.slice(0, 5).map(app => {
-                const client = clients.find(c => c.id === app.clientId);
-                return (
-                  <TableRow key={app.id} className="border-border">
-                    <TableCell className="px-4 py-3">
-                      <p className="font-bold">{client?.name || 'Unknown Client'}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">#{app.id.slice(0, 8).toUpperCase()}</p>
-                    </TableCell>
-                    <TableCell className="px-4 py-3 font-semibold">MWK {(app.requestedAmount || 0).toLocaleString()}</TableCell>
-                    <TableCell className="px-4 py-3 font-medium text-slate-500">
-                      <SLAStatusIndicator submittedAt={app.submittedAt || app.createdAt} />
-                    </TableCell>
-                    <TableCell className="px-4 py-3 text-right">
-                      <Button size="sm" className="h-7 text-[10px] font-bold bg-brand-600" onClick={() => onNavigate('approvals')}>REVIEW</Button>
-                    </TableCell>
+          <div className="flex gap-4">
+            <div className="glass-card !bg-white/5 !border-white/10 p-6 rounded-3xl text-center min-w-[140px]">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Approval Velocity</p>
+              <p className="text-3xl font-black italic">94%</p>
+            </div>
+            <div className="glass-card !bg-brand-500/20 !border-brand-500/20 p-6 rounded-3xl text-center min-w-[140px]">
+              <p className="text-[10px] font-black uppercase tracking-widest text-brand-300 mb-2">Pending Decision</p>
+              <p className="text-3xl font-black italic text-brand-400">{pendingApps.length}</p>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      {/* KPI Cluster */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <motion.div variants={item}>
+          <div className="glass-card p-6 rounded-[2rem] border-l-4 border-l-brand-500 flex items-center justify-between group hover:bg-slate-50 transition-all">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Total AUM</p>
+              <p className="text-2xl font-black text-slate-900 mt-1">{formatCurrency(outstandingPortfolio)}</p>
+            </div>
+            <div className="h-12 w-12 rounded-2xl bg-brand-50 flex items-center justify-center text-brand-600 group-hover:scale-110 transition-transform">
+              <Briefcase size={24} />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div variants={item}>
+          <div className="glass-card p-6 rounded-[2rem] border-l-4 border-l-emerald-500 flex items-center justify-between group hover:bg-slate-50 transition-all">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Recovery Rate</p>
+              <p className="text-2xl font-black text-slate-900 mt-1">98.2%</p>
+            </div>
+            <div className="h-12 w-12 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-600 group-hover:scale-110 transition-transform">
+              <TrendingUp size={24} />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div variants={item}>
+          <div className="glass-card p-6 rounded-[2rem] border-l-4 border-l-amber-500 flex items-center justify-between group hover:bg-slate-50 transition-all">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">High Risk Queue</p>
+              <p className="text-2xl font-black text-slate-900 mt-1">{highRiskApps}</p>
+            </div>
+            <div className="h-12 w-12 rounded-2xl bg-amber-50 flex items-center justify-center text-amber-600 group-hover:scale-110 transition-transform">
+              <ShieldAlert size={24} />
+            </div>
+          </div>
+        </motion.div>
+
+        <motion.div variants={item}>
+          <div className="glass-card p-6 rounded-[2rem] border-l-4 border-l-indigo-500 flex items-center justify-between group hover:bg-slate-50 transition-all">
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Avg Ticket Size</p>
+              <p className="text-2xl font-black text-slate-900 mt-1">{formatCurrency(averageTicketSize)}</p>
+            </div>
+            <div className="h-12 w-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+              <Target size={24} />
+            </div>
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Analytics Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Review Queue */}
+        <motion.div variants={item} className="lg:col-span-12">
+          <div className="glass-card rounded-[2.5rem] overflow-hidden">
+            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div>
+                <h3 className="text-xl font-black text-slate-900 italic uppercase">Priority Review Queue</h3>
+                <p className="text-xs text-slate-500 font-bold tracking-tight">Applications requiring manual credit assessment.</p>
+              </div>
+              <Button 
+                onClick={() => onNavigate('approvals')}
+                className="h-11 px-6 rounded-2xl bg-slate-900 text-white font-black hover:bg-slate-800 transition-all hover:translate-x-1"
+              >
+                OPEN WORKSPACE
+              </Button>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-white">
+                  <TableRow className="hover:bg-transparent border-slate-100">
+                    <TableHead className="px-8 h-12 text-[10px] font-black uppercase tracking-widest text-slate-400">Applicant Identity</TableHead>
+                    <TableHead className="px-8 h-12 text-[10px] font-black uppercase tracking-widest text-slate-400">Facility Amount</TableHead>
+                    <TableHead className="px-8 h-12 text-[10px] font-black uppercase tracking-widest text-slate-400">Risk Assessment</TableHead>
+                    <TableHead className="px-8 h-12 text-[10px] font-black uppercase tracking-widest text-slate-400">SLA Status</TableHead>
+                    <TableHead className="px-8 h-12 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Action</TableHead>
                   </TableRow>
-                );
-              })}
-              {pendingApps.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">
-                    No applications pending review.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </Card>
-
-        <div className="space-y-5">
-          <Card className="border border-border shadow-none rounded-lg bg-[#1A1C23] text-white p-5">
-            <div className="flex items-center gap-2 text-sidebar-foreground mb-4">
-              <TrendingUp size={16} />
-              <h4 className="font-bold text-[10px] uppercase tracking-widest">Portfolio Health</h4>
+                </TableHeader>
+                <TableBody>
+                  {pendingApps.slice(0, 5).map(app => {
+                    const client = clients.find(c => c.id === app.clientId);
+                    const risk = (app.crb?.score || 0) < 450 ? 'HIGH' : (app.crb?.score || 0) < 620 ? 'MEDIUM' : 'LOW';
+                    return (
+                      <TableRow key={app.id} className="group hover:bg-slate-50/50 border-slate-50 transition-colors">
+                        <TableCell className="px-8 py-5">
+                          <div className="flex items-center gap-4">
+                            <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-900 text-xs">
+                              {client?.name?.charAt(0) || 'U'}
+                            </div>
+                            <div>
+                              <p className="font-black text-slate-900">{client?.name || 'Unknown Client'}</p>
+                              <p className="text-[10px] font-bold text-slate-400 italic">APP-{app.id.slice(0, 8).toUpperCase()}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-8 py-5">
+                          <p className="font-black text-slate-900">{formatCurrency(app.requestedAmount || 0)}</p>
+                          <p className="text-[10px] font-bold text-slate-400">{app.loanProduct}</p>
+                        </TableCell>
+                        <TableCell className="px-8 py-5">
+                          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black tracking-widest ${
+                            risk === 'HIGH' ? 'bg-red-50 text-red-600' : risk === 'MEDIUM' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
+                          }`}>
+                            <div className={`w-1.5 h-1.5 rounded-full ${
+                              risk === 'HIGH' ? 'bg-red-500' : risk === 'MEDIUM' ? 'bg-amber-500' : 'bg-emerald-500'
+                            }`} />
+                            {risk} RISK
+                          </div>
+                        </TableCell>
+                        <TableCell className="px-8 py-5 font-black text-[11px] text-slate-500">
+                          <SLAStatusIndicator submittedAt={app.submittedAt || app.createdAt} />
+                        </TableCell>
+                        <TableCell className="px-8 py-5 text-right">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => onNavigate('approvals')}
+                            className="h-9 px-4 rounded-xl font-black text-brand-600 hover:bg-brand-50"
+                          >
+                            REVIEW CASE
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {pendingApps.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-20 text-slate-400 font-bold italic">
+                        The decision queue is currently empty.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </div>
-            <div className="space-y-4">
-              <div>
-                <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground mb-1.5">
-                  <span>Active Loans</span>
-                  <span>{loans.filter(l => l.status === 'ACTIVE').length}</span>
-                </div>
-                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-brand-400" style={{ width: `${(loans.filter(l => l.status === 'ACTIVE').length / (loans.length || 1)) * 100}%` }} />
-                </div>
+          </div>
+        </motion.div>
+
+        {/* Portfolio Analysis */}
+        <motion.div variants={item} className="lg:col-span-8">
+          <div className="glass-card rounded-[2.5rem] p-8 h-full">
+            <div className="flex items-center justify-between mb-8">
+              <h3 className="text-xl font-black text-slate-900 italic uppercase">Portfolio Mix</h3>
+              <p className="text-xs text-slate-500 font-bold">Concentration by asset class.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+              <div className="h-[240px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={portfolioMix} dataKey="value" nameKey="name" innerRadius={60} outerRadius={90} paddingAngle={5}>
+                      {portfolioMix.map((entry, index) => (
+                        <Cell key={entry.name} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-              <div>
-                <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground mb-1.5">
-                  <span>Repayment Rate</span>
-                  <span>{activeLoans.length > 0 ? `${(((activeLoans.length - overdueLoans.length) / activeLoans.length) * 100).toFixed(1)}%` : '100.0%'}</span>
-                </div>
-                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-400" style={{ width: `${activeLoans.length > 0 ? ((activeLoans.length - overdueLoans.length) / activeLoans.length) * 100 : 100}%` }} />
-                </div>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="border border-border shadow-none rounded-lg bg-white p-5">
-            <h3 className="text-sm font-bold mb-4">Quick Links</h3>
-            <div className="space-y-2">
-              <Button 
-                variant="outline" 
-                className="w-full justify-start gap-3 h-10 border-border text-xs font-bold"
-                onClick={() => onNavigate('clients')}
-              >
-                <Users size={16} className="text-brand-600" />
-                Client Directory
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full justify-start gap-3 h-10 border-border text-xs font-bold"
-                onClick={() => onNavigate('applications')}
-              >
-                <FileText size={16} className="text-blue-600" />
-                All Applications
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full justify-start gap-3 h-10 border-border text-xs font-bold"
-                onClick={() => onNavigate('repayments')}
-              >
-                <CreditCard size={16} className="text-emerald-600" />
-                Repayment Logs
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full justify-start gap-3 h-10 border-border text-xs font-bold"
-                onClick={() => onNavigate('loans')}
-              >
-                <DollarSign size={16} className="text-amber-600" />
-                Loan Portfolio
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full justify-start gap-3 h-10 border-border text-xs font-bold"
-                onClick={() => onNavigate('reports')}
-              >
-                <BarChart3 size={16} className="text-slate-700" />
-                Officer Reports
-              </Button>
-            </div>
-          </Card>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
-        <Card className="xl:col-span-3 border border-border shadow-none rounded-lg bg-white overflow-hidden">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-foreground">Approval Pipeline</h3>
-              <p className="text-[12px] text-muted-foreground mt-1">Six-month application volume and disbursement trend.</p>
-            </div>
-            <Button variant="link" className="text-xs text-brand-500 p-0 h-auto" onClick={() => onNavigate('applications')}>Open Applications</Button>
-          </div>
-          <div className="p-4">
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={officerTrendData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                  <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={11} />
-                  <YAxis yAxisId="left" tickLine={false} axisLine={false} fontSize={11} allowDecimals={false} />
-                  <YAxis yAxisId="right" orientation="right" tickLine={false} axisLine={false} fontSize={11} />
-                  <Tooltip />
-                  <Legend />
-                  <Area yAxisId="left" type="monotone" dataKey="submitted" stroke="#208CA2" fill="#42DAD9" fillOpacity={0.25} name="Applications" />
-                  <Area yAxisId="right" type="monotone" dataKey="disbursed" stroke="#0A4969" fill="#0A4969" fillOpacity={0.12} name="Disbursed (K MWK)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="xl:col-span-2 border border-border shadow-none rounded-lg bg-white overflow-hidden">
-          <div className="p-4 border-b border-border">
-            <h3 className="text-sm font-bold text-foreground">Application Mix</h3>
-            <p className="text-[12px] text-muted-foreground mt-1">Live breakdown of the officer decision queue.</p>
-          </div>
-          <div className="p-4">
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={applicationsByStatus} dataKey="value" nameKey="name" innerRadius={56} outerRadius={86} paddingAngle={3}>
-                    {applicationsByStatus.map((entry, index) => (
-                      <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        <Card className="border border-border shadow-none rounded-lg bg-white overflow-hidden">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-foreground">Risk Spotlight</h3>
-              <p className="text-[12px] text-muted-foreground mt-1">Applications that may need deeper underwriting review.</p>
-            </div>
-            <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-brand-600" onClick={() => onNavigate('approvals')}>OPEN QUEUE</Button>
-          </div>
-          <div className="divide-y divide-border">
-            {riskQueue.length === 0 ? (
-              <div className="p-6 text-sm text-muted-foreground italic">No elevated-risk applications in the current queue.</div>
-            ) : (
-              riskQueue.map(item => (
-                <div key={item.application.id} className="p-4 flex items-start justify-between gap-4">
-                  <div>
-                    <p className="font-semibold text-foreground">{item.clientName}</p>
-                    <p className="text-[11px] text-muted-foreground mt-1">
-                      {formatCurrency(item.application.requestedAmount || 0)} requested
-                      {' '}ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ KYC {item.kycStatus.replace(/_/g, ' ')}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground mt-1">Exposure ratio: {item.exposureRatio ? `${item.exposureRatio.toFixed(1)}x monthly income` : 'Income not captured'}</p>
+              <div className="space-y-4">
+                {portfolioMix.map(pm => (
+                  <div key={pm.name} className="flex items-center justify-between p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: pm.color }} />
+                      <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">{pm.name}</span>
+                    </div>
+                    <span className="font-black text-slate-900">{pm.value}</span>
                   </div>
-                  <Badge className={`border-none text-[10px] font-bold ${item.exposureRatio >= 6 ? 'bg-red-50 text-red-700' : item.exposureRatio >= 3 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>
-                    {item.exposureRatio >= 6 ? 'HIGH' : item.exposureRatio >= 3 ? 'MEDIUM' : 'LOW'}
-                  </Badge>
-                </div>
-              ))
-            )}
+                ))}
+              </div>
+            </div>
           </div>
-        </Card>
+        </motion.div>
 
-        <Card className="border border-border shadow-none rounded-lg bg-white overflow-hidden">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold text-foreground">Collections & Follow-up</h3>
-              <p className="text-[12px] text-muted-foreground mt-1">Recent repayments and loan accounts needing attention.</p>
-            </div>
-            <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-brand-600" onClick={() => onNavigate('repayments')}>OPEN LEDGER</Button>
-          </div>
-          <div className="p-4 space-y-4">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Recent Repayments</p>
-              <div className="space-y-3">
-                {recentRepayments.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">No repayments recorded yet.</p>
-                ) : (
-                  recentRepayments.map(transaction => (
-                    <div key={transaction.id} className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
-                      <div>
-                        <p className="font-semibold text-foreground">{transaction.clientName || 'Unknown Client'}</p>
-                        <p className="text-[11px] text-muted-foreground mt-1">{formatDateLabel(transaction.timestamp, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-foreground">{formatCurrency(transaction.amount || 0)}</p>
-                        <p className="text-[11px] text-emerald-600 font-medium">{transaction.method || 'Recorded'}</p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Upcoming Attention</p>
-              <div className="space-y-3">
-                {upcomingAttention.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">No outstanding loan balances currently need follow-up.</p>
-                ) : (
-                  upcomingAttention.map(item => (
-                    <div key={item.id} className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
-                      <div>
-                        <p className="font-semibold text-foreground">{item.clientName}</p>
-                        <p className="text-[11px] text-muted-foreground mt-1">Due {formatDateLabel(item.nextDueDate)}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-foreground">{formatCurrency(item.outstandingBalance)}</p>
-                        <Badge className={`border-none text-[10px] font-bold ${item.status === 'DEFAULTED' ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700'}`}>
-                          {item.status === 'DEFAULTED' ? 'OVERDUE' : 'WATCH'}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))
-                )}
+        {/* Risk Spotlight */}
+        <motion.div variants={item} className="lg:col-span-4">
+          <div className="glass-card rounded-[2.5rem] p-8 h-full bg-slate-950 text-white">
+            <h3 className="text-xl font-black italic uppercase mb-8">Risk Spotlight</h3>
+            <div className="space-y-6">
+              {riskQueue.length > 0 ? riskQueue.map(rq => (
+                <div key={rq.app.id} className="relative p-4 rounded-2xl bg-white/5 border border-white/10 group hover:bg-white/10 transition-colors">
+                  <div className="flex justify-between items-start mb-2">
+                    <p className="font-black text-sm truncate pr-4">{rq.clientName}</p>
+                    <span className="text-[9px] font-black text-red-400 uppercase tracking-tighter">CRB: {rq.riskScore}</span>
+                  </div>
+                  <div className="flex justify-between items-end">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{formatCurrency(rq.amount)}</p>
+                    <Button variant="ghost" className="h-6 text-[9px] font-black text-brand-400 p-0" onClick={() => onNavigate('approvals')}>VIEW</Button>
+                  </div>
+                </div>
+              )) : (
+                <p className="text-slate-500 italic text-sm text-center py-12">No high-risk items requiring focus.</p>
+              )}
+              
+              <div className="pt-6 border-t border-white/10 text-center">
+                <Button 
+                  className="w-full bg-brand-600 hover:bg-brand-500 text-white font-black rounded-2xl h-11"
+                  onClick={() => onNavigate('approvals')}
+                >
+                  FULL RISK AUDIT
+                </Button>
               </div>
             </div>
           </div>
-        </Card>
+        </motion.div>
       </div>
     </motion.div>
   );
 }
+
 
 
 function LoanProductsView({ products }: { products: LoanProduct[] }) {
@@ -8383,7 +9828,17 @@ function LoanProductsView({ products }: { products: LoanProduct[] }) {
   );
 }
 
-function LoansView({ loans, clients }: { loans: any[], clients: any[] }) {
+function LoansView({
+  loans,
+  clients,
+  title = 'Loan Portfolio',
+  description = 'Global view of all active, closed, and defaulted loans.',
+}: {
+  loans: any[],
+  clients: any[],
+  title?: string,
+  description?: string,
+}) {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
   const totalPages = Math.ceil(loans.length / pageSize);
@@ -8399,8 +9854,8 @@ function LoansView({ loans, clients }: { loans: any[], clients: any[] }) {
     >
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">Loan Portfolio</h2>
-          <p className="text-[12px] text-muted-foreground">Global view of all active, closed, and defaulted loans.</p>
+          <h2 className="text-xl font-bold tracking-tight text-foreground">{title}</h2>
+          <p className="text-[12px] text-muted-foreground">{description}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="h-9 px-4 text-xs font-semibold border-border bg-white">
@@ -9287,9 +10742,13 @@ function UserManagementView({ users, onUpdateUserStatus }: { users: any[], onUpd
   );
 }
 
-function TransactionsAuditView({ transactions, loans }: { transactions: any[], loans: any[] }) {
+function TransactionsAuditView({ transactions, loans, role }: { transactions: any[], loans: any[], role?: UserRole }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const title = role === 'AGENT' ? 'Transaction History' : 'Transactions Audit';
+  const subtitle = role === 'AGENT'
+    ? 'Review cash collection records and recent field activity.'
+    : 'Follow the money trail. Verify all financial movements.';
 
   const filteredTransactions = transactions.filter(t => {
     const matchesSearch =
@@ -9309,8 +10768,8 @@ function TransactionsAuditView({ transactions, loans }: { transactions: any[], l
     >
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">Transactions Audit</h2>
-          <p className="text-[12px] text-muted-foreground">Follow the money trail. Verify all financial movements.</p>
+          <h2 className="text-xl font-bold tracking-tight text-foreground">{title}</h2>
+          <p className="text-[12px] text-muted-foreground">{subtitle}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" className="h-9 text-xs font-semibold">
@@ -9346,7 +10805,7 @@ function TransactionsAuditView({ transactions, loans }: { transactions: any[], l
               <TableHead className="text-muted-foreground font-semibold h-10 px-5">Type</TableHead>
               <TableHead className="text-muted-foreground font-semibold h-10 px-5">Amount</TableHead>
               <TableHead className="text-muted-foreground font-semibold h-10 px-5">Client</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-10 px-5">Agent/Officer</TableHead>
+              <TableHead className="text-muted-foreground font-semibold h-10 px-5">Handler/Officer</TableHead>
               <TableHead className="text-muted-foreground font-semibold h-10 px-5 text-right">Status</TableHead>
             </TableRow>
           </TableHeader>
@@ -9652,7 +11111,7 @@ function CasesView({ users, applications, loans, transactions }: { users: any[],
                 title: 'Manual Investigation',
                 status: 'OPEN',
                 priority: 'MEDIUM',
-                assignee: getActiveSessionEmail() || 'auditor@fastkwacha.com',
+                assignee: getActiveSessionEmail() || 'system@fastkwacha.com',
                 updated: new Date().toISOString(),
                 sourceId: 'MANUAL',
                 description: 'Manually opened from the case workspace.',
@@ -9745,6 +11204,90 @@ function SettingsView({
 }) {
   const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'appearance' | 'notifications' | 'system'>('profile');
   const { theme, setTheme } = useTheme();
+  
+  // Profile Photo State
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  
+  // Password State
+  const [passwordState, setPasswordState] = useState({
+    current: '',
+    new: '',
+    confirm: ''
+  });
+  const [passwordUpdating, setPasswordUpdating] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image too large. Max 5MB allowed.");
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const storageRef = ref(storage, `profiles/${profile.uid}/${file.name}`);
+      const uploadTask = uploadBytesResumable(storageRef, file);
+
+      uploadTask.on('state_changed', 
+        null,
+        (error) => {
+          console.error("Upload error:", error);
+          toast.error("Upload failed. Check permissions.");
+          setUploading(false);
+        },
+        async () => {
+          const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+          onUpdateProfile({ ...profile, photoURL: downloadURL } as any);
+          toast.success("Profile photo updated successfully!");
+          setUploading(false);
+        }
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error("Storage Error: Identity asset could not be persisted.");
+      setUploading(false);
+    }
+  };
+
+  const handlePasswordUpdate = async () => {
+    if (!passwordState.current || !passwordState.new || !passwordState.confirm) {
+      toast.error("Please fill all password fields.");
+      return;
+    }
+    if (passwordState.new !== passwordState.confirm) {
+      toast.error("New passwords do not match.");
+      return;
+    }
+    if (passwordState.new.length < 8) {
+      toast.error("Security Protocol: Password must be at least 8 characters.");
+      return;
+    }
+
+    try {
+      setPasswordUpdating(true);
+      const user = auth.currentUser;
+      if (!user || !user.email) throw new Error("No active session found.");
+
+      const credential = EmailAuthProvider.credential(user.email, passwordState.current);
+      await reauthenticateWithCredential(user, credential);
+      await updatePassword(user, passwordState.new);
+      
+      toast.success("Security status updated. Password changed.");
+      setPasswordState({ current: '', new: '', confirm: '' });
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/wrong-password') {
+        toast.error("Invalid current password. Checksum fail.");
+      } else {
+        toast.error("Security update failed. Protocol error.");
+      }
+    } finally {
+      setPasswordUpdating(false);
+    }
+  };
 
   const tabs = [
     { id: 'profile', label: 'Profile Settings', icon: <Users size={16} />, adminOnly: false },
@@ -9755,81 +11298,121 @@ function SettingsView({
   ].filter(tab => !tab.adminOnly || profile.role === 'ADMIN');
 
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex flex-col md:flex-row gap-6">
+    <div className="max-w-6xl mx-auto pb-20">
+      <div className="flex flex-col md:flex-row gap-8">
         {/* Inner Sidebar */}
-        <aside className="w-full md:w-64 space-y-1">
-          <div className="mb-4 px-3 py-2">
-            <h2 className="text-lg font-bold text-slate-900 font-heading">Settings</h2>
-            <p className="text-xs text-slate-500">Manage your account and preferences.</p>
+        <aside className="w-full md:w-72 space-y-2">
+          <div className="mb-6 px-4">
+            <h2 className="text-2xl font-black text-slate-900 italic uppercase">Settings</h2>
+            <p className="text-xs text-slate-500 font-bold tracking-tight">Terminal customization & security.</p>
           </div>
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                activeTab === tab.id 
-                  ? 'bg-primary text-white shadow-md' 
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent'
-              }`}
-            >
-              <span className="shrink-0">{tab.icon}</span>
-              {tab.label}
-            </button>
-          ))}
+          <div className="glass-card p-2 rounded-[2rem] space-y-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`w-full flex items-center gap-3 px-5 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all ${
+                  activeTab === tab.id 
+                    ? 'bg-slate-900 text-white shadow-xl translate-x-2' 
+                    : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                <span className="shrink-0">{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </aside>
 
         {/* Tab Content */}
         <div className="flex-1 min-w-0">
-          <Card className="border border-border shadow-none rounded-xl overflow-hidden min-h-[500px] bg-card text-card-foreground">
-            <CardContent className="p-8">
+          <Card className="glass-card rounded-[2.5rem] border-none shadow-2xl overflow-hidden min-h-[600px]">
+            <CardContent className="p-10">
               <AnimatePresence mode="wait">
                 {activeTab === 'profile' && (
                   <motion.div 
                     key="profile"
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    className="space-y-6"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-8"
                   >
-                    <div>
-                      <h3 className="text-xl font-bold text-slate-900">Profile Settings</h3>
-                      <p className="text-sm text-slate-500">Update your personal information and contact details.</p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-2xl font-black text-slate-900 italic uppercase">Profile Settings</h3>
+                        <p className="text-sm text-slate-500 font-medium">Update your digital identity and contact protocols.</p>
+                      </div>
+                      <Badge className="bg-brand-50 text-brand-700 border-none px-4 py-1 font-black text-[10px] tracking-widest uppercase">
+                        {profile.role}
+                      </Badge>
                     </div>
-                    <div className="flex items-center gap-6 pb-6 border-b border-border">
-                      <Avatar className="h-24 w-24 border-4 border-white shadow-lg">
-                        <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.uid}`} />
-                        <AvatarFallback className="text-2xl">{profile.name.charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      <div className="space-y-2">
-                        <Button variant="outline" size="sm">Change Photo</Button>
-                        <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black">PNG, JPG or GIF. Max 5MB.</p>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-8 pb-10 border-b border-slate-100">
+                      <div className="relative group">
+                        <Avatar className="h-32 w-32 border-4 border-white shadow-2xl rounded-[2.5rem] overflow-hidden">
+                          <AvatarImage src={(profile as any).photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.uid}`} className="object-cover" />
+                          <AvatarFallback className="text-3xl font-black bg-slate-100 text-slate-900">{profile.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        {uploading && (
+                          <div className="absolute inset-0 bg-slate-900/60 flex items-center justify-center rounded-[2.5rem] backdrop-blur-sm">
+                            <RefreshCw className="text-white animate-spin" size={24} />
+                          </div>
+                        )}
+                        <button 
+                          onClick={() => fileInputRef.current?.click()}
+                          className="absolute -bottom-2 -right-2 h-10 w-10 rounded-2xl bg-brand-600 text-white flex items-center justify-center shadow-lg hover:bg-brand-700 transition-transform hover:scale-110"
+                        >
+                          <Plus size={20} />
+                        </button>
+                        <input 
+                          type="file" 
+                          ref={fileInputRef} 
+                          className="hidden" 
+                          accept="image/*" 
+                          onChange={handleImageUpload} 
+                        />
+                      </div>
+                      <div className="space-y-1 text-center sm:text-left">
+                        <h4 className="text-lg font-black text-slate-900">{profile.name}</h4>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{profile.email}</p>
+                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest mt-2">{uploading ? 'UPLOADING...' : 'PNG, JPG or GIF. Max 5MB.'}</p>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Full Name</label>
-                        <Input defaultValue={profile.name} onChange={(e) => onUpdateProfile({ ...profile, name: e.target.value })} />
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Full Name</label>
+                        <Input 
+                          defaultValue={profile.name} 
+                          className="h-12 rounded-2xl border-slate-200 focus:border-brand-500"
+                          onChange={(e) => onUpdateProfile({ ...profile, name: e.target.value })} 
+                        />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Email Address</label>
-                        <Input defaultValue={profile.email} disabled className="bg-slate-50 cursor-not-allowed" />
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Address</label>
+                        <Input defaultValue={profile.email} disabled className="h-12 rounded-2xl bg-slate-50 border-slate-200 cursor-not-allowed opacity-60" />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Phone Number</label>
-                        <Input defaultValue={profile.phone} placeholder="+265..." onChange={(e) => onUpdateProfile({ ...profile, phone: e.target.value })} />
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone Number</label>
+                        <Input 
+                          defaultValue={profile.phone} 
+                          placeholder="+265..." 
+                          className="h-12 rounded-2xl border-slate-200"
+                          onChange={(e) => onUpdateProfile({ ...profile, phone: e.target.value })} 
+                        />
                       </div>
                       <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">National ID (KYC)</label>
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">National ID (KYC)</label>
                         {profile.kycComplete ? (
                           <div className="relative">
-                            <Input defaultValue={profile.nationalId} disabled className="bg-emerald-50 text-emerald-900 border-emerald-100 pr-10" />
-                            <ShieldCheck className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500" size={16} />
+                            <Input defaultValue={profile.nationalId} disabled className="h-12 rounded-2xl bg-emerald-50 text-emerald-900 border-emerald-100 pr-10 font-bold" />
+                            <ShieldCheck className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-500" size={18} />
                           </div>
                         ) : (
                           <Input 
                             defaultValue={profile.nationalId} 
                             placeholder="Enter 12-digit National ID"
+                            className="h-12 rounded-2xl border-slate-200"
                             onChange={(e) => onUpdateProfile({ ...profile, nationalId: e.target.value.toUpperCase() })} 
                           />
                         )}
@@ -9837,29 +11420,32 @@ function SettingsView({
                     </div>
 
                     {!profile.kycComplete && (
-                      <div className="mt-8 p-6 bg-slate-900 rounded-[1.5rem] border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                           <div className="w-10 h-10 rounded-xl bg-brand-500/10 flex items-center justify-center text-brand-400">
-                              <ShieldAlert size={20} />
-                           </div>
-                           <div>
-                              <p className="text-sm font-bold text-white">Verification Pending</p>
-                              <p className="text-[10px] text-slate-400 font-medium">Verify your ID to unlock up to MWK 1,000,000 credit limit.</p>
-                           </div>
+                      <div className="mt-8 p-8 rounded-[2rem] bg-slate-900 text-white border border-white/5 shadow-2xl relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-32 h-full bg-gradient-to-l from-brand-500/10 to-transparent" />
+                        <div className="relative z-10 flex flex-col lg:flex-row items-center justify-between gap-6 text-center lg:text-left">
+                          <div className="flex items-center gap-5">
+                             <div className="w-14 h-14 rounded-2xl bg-brand-500/20 flex items-center justify-center text-brand-400 shrink-0">
+                                <ShieldAlert size={28} />
+                             </div>
+                             <div>
+                                <p className="text-lg font-black italic uppercase">Verification Required</p>
+                                <p className="text-xs text-slate-400 font-bold tracking-tight">Complete KYC protocol to increase transaction limits and authority.</p>
+                             </div>
+                          </div>
+                          <Button 
+                            onClick={() => {
+                              if (!profile.phone || !profile.nationalId) {
+                                toast.error("Institutional Error: Requirements missing. Please fill Phone and National ID.");
+                                return;
+                              }
+                              onUpdateProfile({ ...profile, kycComplete: true });
+                              toast.success("KYC Protocol Initialized. Identity verified.");
+                            }}
+                            className="bg-brand-500 hover:bg-brand-400 text-white font-black text-xs uppercase tracking-widest px-8 rounded-2xl h-12 shadow-lg shadow-brand-500/20"
+                          >
+                            VERIFY IDENTITY
+                          </Button>
                         </div>
-                        <Button 
-                          onClick={() => {
-                            if (!profile.phone || !profile.nationalId) {
-                              toast.error("Institutional Error: Requirements missing. Please fill Phone and National ID.");
-                              return;
-                            }
-                            onUpdateProfile({ ...profile, kycComplete: true });
-                            toast.success("KYC Protocol Initialized. Identity verified.");
-                          }}
-                          className="bg-brand-600 hover:bg-brand-700 text-white font-black text-[10px] uppercase tracking-widest px-8 rounded-xl h-10"
-                        >
-                          SUBMIT KYC FOR REVIEW
-                        </Button>
                       </div>
                     )}
                   </motion.div>
@@ -9868,57 +11454,88 @@ function SettingsView({
                 {activeTab === 'security' && (
                   <motion.div 
                     key="security"
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    className="space-y-6"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-8"
                   >
                     <div>
-                      <h3 className="text-xl font-bold text-slate-900">Account Security</h3>
-                      <p className="text-sm text-slate-500">Manage your password and track account activity.</p>
+                      <h3 className="text-2xl font-black text-slate-900 italic uppercase">Security Protocols</h3>
+                      <p className="text-sm text-slate-500 font-medium">Protect your access and monitor account integrity.</p>
                     </div>
                     
-                    <Card className="border border-border shadow-none bg-slate-50 p-6 space-y-4">
-                      <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                        <ShieldAlert size={16} className="text-brand-500" />
-                        Change Password
-                      </h4>
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Current Password</label>
-                            <Input type="password" placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢" />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">New Password</label>
-                            <Input type="password" placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢" />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Confirm New</label>
-                            <Input type="password" placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢" />
-                          </div>
+                    <div className="glass-card rounded-[2rem] p-8 border-none bg-slate-50 shadow-inner">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="h-10 w-10 rounded-xl bg-slate-900 text-white flex items-center justify-center">
+                          <ShieldAlert size={20} />
                         </div>
-                        <Button size="sm" className="bg-slate-900 text-white hover:bg-slate-800">Update Password</Button>
+                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Update Access Key</h4>
                       </div>
-                    </Card>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Current Password</label>
+                          <Input 
+                            type="password" 
+                            className="h-12 rounded-2xl border-slate-200"
+                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" 
+                            value={passwordState.current}
+                            onChange={(e) => setPasswordState(s => ({...s, current: e.target.value}))}
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-start-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">New Password</label>
+                          <Input 
+                            type="password" 
+                            className="h-12 rounded-2xl border-slate-200"
+                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" 
+                            value={passwordState.new}
+                            onChange={(e) => setPasswordState(s => ({...s, new: e.target.value}))}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Verify New Password</label>
+                          <Input 
+                            type="password" 
+                            className="h-12 rounded-2xl border-slate-200"
+                            placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" 
+                            value={passwordState.confirm}
+                            onChange={(e) => setPasswordState(s => ({...s, confirm: e.target.value}))}
+                          />
+                        </div>
+                      </div>
+                      <Button 
+                        onClick={handlePasswordUpdate}
+                        disabled={passwordUpdating}
+                        className="bg-slate-900 text-white hover:bg-slate-800 font-black text-xs uppercase tracking-widest h-12 px-8 rounded-2xl gap-2 shadow-xl"
+                      >
+                        {passwordUpdating ? <RefreshCw className="animate-spin" size={16} /> : <ShieldCheck size={18} />}
+                        {passwordUpdating ? 'UPDATING...' : 'CONFIRM SECURITY UPDATE'}
+                      </Button>
+                    </div>
 
                     <div className="space-y-4">
-                      <h4 className="text-sm font-bold text-slate-900">Recent Login Activity</h4>
-                      <div className="rounded-xl border border-border overflow-hidden">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Login History</h4>
+                        <Badge variant="outline" className="text-[9px] uppercase tracking-widest bg-emerald-50 text-emerald-700 border-none font-black">Active Session</Badge>
+                      </div>
+                      <div className="rounded-[2rem] border border-slate-100 overflow-hidden bg-white">
                         <Table>
                           <TableBody>
-                            <TableRow>
-                              <TableCell className="font-medium text-xs">
-                                <div className="flex items-center gap-3">
-                                  <Smartphone size={14} className="text-slate-400" />
+                            <TableRow className="border-none hover:bg-slate-50 transition-colors">
+                              <TableCell className="px-8 py-5">
+                                <div className="flex items-center gap-4">
+                                  <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center">
+                                    <Smartphone size={20} className="text-slate-400" />
+                                  </div>
                                   <div>
-                                    <p className="font-bold text-slate-900">{profile.lastDevice || 'Chrome on Windows'}</p>
-                                    <p className="text-[10px] text-slate-500">Last accessed: {profile.lastLogin ? new Date(profile.lastLogin).toLocaleString() : 'Just now'}</p>
+                                    <p className="font-black text-slate-900 text-sm">{profile.lastDevice || 'Secure Terminal Access'}</p>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Last Auth: {profile.lastLogin ? new Date(profile.lastLogin).toLocaleString() : 'Recently Active'}</p>
                                   </div>
                                 </div>
                               </TableCell>
-                              <TableCell className="text-right">
-                                <Badge variant="outline" className="text-[9px] uppercase tracking-widest bg-emerald-50 text-emerald-700 border-none">Current Session</Badge>
+                              <TableCell className="px-8 py-5 text-right">
+                                <p className="text-[10px] font-black text-emerald-600 uppercase tracking-tighter">ENCRYPTED SESSION</p>
                               </TableCell>
                             </TableRow>
                           </TableBody>
@@ -9931,49 +11548,36 @@ function SettingsView({
                 {activeTab === 'appearance' && (
                   <motion.div 
                     key="appearance"
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    className="space-y-6"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-8"
                   >
                     <div>
-                      <h3 className="text-xl font-bold text-slate-900">Appearance Settings</h3>
-                      <p className="text-sm text-slate-500">Customize how the application looks for you.</p>
+                      <h3 className="text-2xl font-black text-slate-900 italic uppercase">Interface Styles</h3>
+                      <p className="text-sm text-slate-500 font-medium">Personalize your visual workflow environment.</p>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card 
-                        className={`cursor-pointer transition-all border-2 ${theme === 'light' ? 'border-primary' : 'border-border'}`}
-                        onClick={() => setTheme('light')}
-                      >
-                        <CardContent className="p-4 flex flex-col items-center gap-4">
-                          <div className="w-full aspect-video bg-white rounded border border-slate-200 shadow-sm flex items-center justify-center">
-                            <Plus className="text-slate-200" size={32} />
-                          </div>
-                          <p className="text-xs font-bold uppercase tracking-widest">Light Mode</p>
-                        </CardContent>
-                      </Card>
-                      <Card 
-                        className={`cursor-pointer transition-all border-2 ${theme === 'dark' ? 'border-primary' : 'border-border'}`}
-                        onClick={() => setTheme('dark')}
-                      >
-                        <CardContent className="p-4 flex flex-col items-center gap-4">
-                          <div className="w-full aspect-video bg-slate-900 rounded border border-slate-800 shadow-sm flex items-center justify-center">
-                            <Plus className="text-slate-800" size={32} />
-                          </div>
-                          <p className="text-xs font-bold uppercase tracking-widest">Dark Mode</p>
-                        </CardContent>
-                      </Card>
-                      <Card 
-                        className={`cursor-pointer transition-all border-2 ${theme === 'system' ? 'border-primary' : 'border-border'}`}
-                        onClick={() => setTheme('system')}
-                      >
-                        <CardContent className="p-4 flex flex-col items-center gap-4">
-                          <div className="w-full aspect-video bg-gradient-to-br from-white to-slate-900 rounded border border-slate-200 shadow-sm flex items-center justify-center">
-                            <Plus className="text-slate-400 opacity-20" size={32} />
-                          </div>
-                          <p className="text-xs font-bold uppercase tracking-widest">System Default</p>
-                        </CardContent>
-                      </Card>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      {[
+                        { id: 'light', label: 'Day Mode', bg: 'bg-white', text: 'text-slate-900', border: 'border-slate-200' },
+                        { id: 'dark', label: 'Night Mode', bg: 'bg-slate-900', text: 'text-white', border: 'border-slate-800' },
+                        { id: 'system', label: 'Adaptive', bg: 'bg-gradient-to-br from-white to-slate-900', text: 'text-slate-500', border: 'border-slate-200' }
+                      ].map((t) => (
+                        <Card 
+                          key={t.id}
+                          className={`cursor-pointer transition-all border-4 rounded-[2.5rem] overflow-hidden group ${theme === t.id ? 'border-brand-500 scale-[1.02] shadow-2xl' : 'border-transparent hover:border-slate-200 shadow-sm'}`}
+                          onClick={() => setTheme(t.id as any)}
+                        >
+                          <CardContent className="p-0">
+                            <div className={`h-32 w-full ${t.bg} flex items-center justify-center transition-transform group-hover:scale-110`}>
+                              {theme === t.id && <CheckCircle2 className="text-brand-500" size={32} />}
+                            </div>
+                            <div className="p-5 text-center bg-white border-t border-slate-50">
+                              <p className="text-[10px] font-black uppercase tracking-widest text-slate-900">{t.label}</p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
                     </div>
                   </motion.div>
                 )}
@@ -9981,25 +11585,30 @@ function SettingsView({
                 {activeTab === 'notifications' && (
                   <motion.div 
                     key="notifications"
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    className="space-y-6"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-8"
                   >
                     <div>
-                      <h3 className="text-xl font-bold text-slate-900">Notification Settings</h3>
-                      <p className="text-sm text-slate-500">Choose how you want to be notified about important events.</p>
+                      <h3 className="text-2xl font-black text-slate-900 italic uppercase">Alert Protocols</h3>
+                      <p className="text-sm text-slate-500 font-medium">Manage how the system communicates critical events.</p>
                     </div>
                     <div className="space-y-4">
                       <NotificationToggle 
-                        title="Loan Approval Alerts" 
-                        description="Receive instant notifications when a loan application status changes." 
-                        icon={<CheckCircle2 size={16} className="text-emerald-500" />}
+                        title="Decision Queue Alerts" 
+                        description="Receive instant notifications when new applications enter your review pipeline." 
+                        icon={<CheckCircle2 size={18} className="text-emerald-500" />}
                       />
                       <NotificationToggle 
-                        title="Payment Reminders" 
-                        description="Get alerts for upcoming and overdue loan repayments." 
-                        icon={<Clock size={16} className="text-amber-500" />}
+                        title="Security Event Logs" 
+                        description="Alerts for login attempts, password changes, and sensitive field updates." 
+                        icon={<ShieldAlert size={18} className="text-brand-500" />}
+                      />
+                      <NotificationToggle 
+                        title="Compliance Reminders" 
+                        description="Schedule alerts for overdue KYC reviews and audit requirements." 
+                        icon={<Clock size={18} className="text-amber-500" />}
                       />
                     </div>
                   </motion.div>
@@ -10008,54 +11617,59 @@ function SettingsView({
                 {activeTab === 'system' && (
                   <motion.div 
                     key="system"
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    className="space-y-6"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="space-y-8"
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="text-xl font-bold text-slate-900 underline decoration-primary/30 decoration-4">System Settings (Global)</h3>
-                        <p className="text-sm text-slate-500">Configure global business rules and financial parameters.</p>
+                        <h3 className="text-2xl font-black text-slate-900 italic uppercase">Core Configuration</h3>
+                        <p className="text-sm text-slate-500 font-medium">Global financial parameters and business logic.</p>
                       </div>
-                      <Badge className="bg-red-50 text-red-700 border-none px-3 py-1 font-black text-[10px] tracking-widest uppercase">Admin Authority Required</Badge>
+                      <Badge className="bg-red-50 text-red-700 border-none px-4 py-2 font-black text-[10px] tracking-widest uppercase shadow-sm">ADMIN CLEARANCE REQUIRED</Badge>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Default Interest Rate (%)</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-4">
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Standard APR (%)</label>
                         <Input 
                           type="number" 
+                          className="h-12 rounded-2xl border-slate-200 font-bold"
                           value={systemSettings.interest_rate_default} 
                           onChange={(e) => onUpdateSystemSettings({ ...systemSettings, interest_rate_default: Number(e.target.value) })} 
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Max Loan Duration (Months)</label>
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Max Facility Tenure (Months)</label>
                         <Input 
                           type="number" 
+                          className="h-12 rounded-2xl border-slate-200 font-bold"
                           value={systemSettings.max_loan_duration} 
                           onChange={(e) => onUpdateSystemSettings({ ...systemSettings, max_loan_duration: Number(e.target.value) })} 
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Penalty Rate (%)</label>
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Default Late Penalty (%)</label>
                         <Input 
                           type="number" 
+                          className="h-12 rounded-2xl border-slate-200 font-bold"
                           value={systemSettings.penalty_rate} 
                           onChange={(e) => onUpdateSystemSettings({ ...systemSettings, penalty_rate: Number(e.target.value) })} 
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Functional Currency</label>
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reporting Currency</label>
                         <Input 
+                          className="h-12 rounded-2xl border-slate-200 font-bold"
                           value={systemSettings.currency} 
                           onChange={(e) => onUpdateSystemSettings({ ...systemSettings, currency: e.target.value })} 
                         />
                       </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Company Branding Name</label>
+                      <div className="space-y-3 md:col-span-2">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Institution Branding Name</label>
                         <Input 
+                          className="h-12 rounded-2xl border-slate-200 font-bold"
                           value={systemSettings.company_name} 
                           onChange={(e) => onUpdateSystemSettings({ ...systemSettings, company_name: e.target.value })} 
                         />
@@ -10374,12 +11988,6 @@ function SLAStatusIndicator({ submittedAt }: { submittedAt: any }) {
         </div>
       </div>
     );
-  } else if (hoursElapsed > 20) {
-    return (
-      <div className="flex items-center gap-2 group relative">
-        <Badge className="bg-amber-50 text-amber-600 border-amber-100 font-bold px-3 py-1 rounded-full">SLA WARNING</Badge>
-      </div>
-    );
   }
   
   return (
@@ -10390,190 +11998,810 @@ function SLAStatusIndicator({ submittedAt }: { submittedAt: any }) {
   );
 }
 
-function ClientDashboardView({ loans, receipts, profile, onNavigate, onPay, onViewReceipt }: { loans: any[], receipts: ReceiptRecord[], profile: AuthProfile | null, onNavigate: (view: View) => void, onPay: (loan: any) => void, onViewReceipt: (rcpt: ReceiptRecord) => void }) {
-  const [activeTab, setActiveTab] = useState<'loans' | 'receipts'>('loans');
+function ClientDashboardView({ 
+  view, 
+  loans, 
+  receipts, 
+  profile, 
+  notifications,
+  clients,
+  applications,
+  onNavigate, 
+  onPay, 
+  onViewReceipt,
+  handleLogout,
+  settings,
+  onUpdateSettings,
+  uploadDocument,
+}: { 
+  view: View,
+  loans: any[], 
+  receipts: ReceiptRecord[], 
+  profile: AuthProfile | null, 
+  notifications: NotificationRecord[],
+  clients: any[],
+  applications: any[],
+  onNavigate: (v: View) => void, 
+  onPay: (loan: any) => void, 
+  onViewReceipt: (receipt: ReceiptRecord) => void,
+  handleLogout: () => Promise<void>,
+  settings: any,
+  onUpdateSettings: (newSettings: any) => Promise<void>,
+  uploadDocument: any
+}) {
+  const [loanSubTab, setLoanSubTab] = useState<'my' | 'apply' | 'status' | 'schedule'>('my');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editName, setEditName] = useState(profile?.name || '');
+  const [editPhone, setEditPhone] = useState(profile?.phone || '');
+  const [editAddress, setEditAddress] = useState(profile?.address || '');
+  const [avatarSeed, setAvatarSeed] = useState(profile?.id || 'default');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Loan Application Form State
+  const [appAmount, setAppAmount] = useState('');
+  const [appTerm, setAppTerm] = useState('3');
+  const [appPurpose, setAppPurpose] = useState('');
+  const [appProduct, setAppProduct] = useState('');
+  const [appCollateral, setAppCollateral] = useState('');
+  const [isSubmittingApp, setIsSubmittingApp] = useState(false);
+
+  // Security Form State
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const handleSaveProfile = async () => {
+    if (!profile) return;
+    setIsSavingProfile(true);
+    try {
+      if (profile.id.startsWith('demo-') || profile.id.startsWith('local-')) {
+        const updated = { ...profile, name: editName, phone: editPhone, address: editAddress, avatarSeed };
+        saveLocalUser(updated);
+        toast.success("Local profile updated.");
+      } else {
+        await updateDoc(doc(db, 'users', profile.id), {
+          name: editName,
+          phone: editPhone,
+          address: editAddress,
+          avatarSeed: avatarSeed,
+          updatedAt: serverTimestamp()
+        });
+        toast.success("Cloud profile updated successfully!");
+      }
+      setIsEditingProfile(false);
+    } catch (error) {
+      console.error("Failed to update profile:", error);
+      toast.error("Failed to update profile details.");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      toast.error("Passwords do not match.");
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters.");
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      await updatePassword(auth.currentUser!, newPassword);
+      toast.success("Password updated successfully.");
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error: any) {
+      if (error.code === 'auth/requires-recent-login') {
+        toast.error("Security re-authentication required. Please logout and login again.");
+      } else {
+        toast.error(error.message || "Failed to update password.");
+      }
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const activeLoans = loans.filter(l => l.status === 'ACTIVE');
+  const totalLoanBalance = loans.reduce((acc, l) => acc + (l.outstandingBalance || 0), 0);
+  const nextPayment = loans
+    .filter(l => l.status === 'ACTIVE' && l.nextDueDate)
+    .sort((a, b) => new Date(a.nextDueDate).getTime() - new Date(b.nextDueDate).getTime())[0];
 
-  return (
-    <div className="space-y-8">
-      {profile && !profile.kycComplete && (
-        <motion.div 
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-amber-50 border-2 border-amber-200 rounded-[2.5rem] p-10 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden"
-        >
-          <div className="flex items-center gap-8 z-10">
-            <div className="w-20 h-20 rounded-[2rem] bg-amber-100 flex items-center justify-center text-amber-600 shadow-xl shadow-amber-500/10">
-              <ShieldAlert size={40} />
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-2xl font-black text-slate-900 tracking-tighter">Phase 2 Verification Required</h3>
-              <p className="text-slate-600 text-sm font-medium max-w-md">Institutional access is restricted. Link your National ID and verify your Phone Number to unlock loan facilities.</p>
-            </div>
-          </div>
-          <Button 
-            onClick={() => onNavigate('settings')}
-            className="z-10 bg-amber-600 hover:bg-amber-700 h-14 px-10 rounded-2xl font-black text-xs uppercase tracking-widest text-white transition-all shadow-xl shadow-amber-600/20"
-          >
-            COMPLETE KYC PROTOCOL <ArrowRight size={16} className="ml-2" />
-          </Button>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-amber-200/20 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-        </motion.div>
-      )}
-      <div className="bg-brand-600 rounded-[2.5rem] p-10 text-white relative overflow-hidden shadow-2xl shadow-brand-500/20">
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
-          <div className="space-y-3">
-             <div className="inline-flex items-center gap-2 bg-white/10 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/10">
-                <ShieldCheck size={14} className="text-emerald-400" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white">Institutional Access Locked</span>
-             </div>
-             <h2 className="text-5xl font-black tracking-tighter italic leading-none">Financial Hub</h2>
-             <p className="text-brand-50 text-sm font-medium opacity-80">Track your active facilities and strictly sequential financial records.</p>
-          </div>
-          
-          <div className="flex gap-4">
-            <Button 
-                onClick={() => onNavigate('applications')}
-                className="bg-white text-brand-600 hover:bg-slate-50 h-16 px-10 rounded-[1.25rem] font-black text-sm tracking-tight shadow-xl transform active:scale-95 transition-all group"
-            >
-                NEW APPLICATION <Plus size={18} className="ml-2 group-hover:rotate-90 transition-transform duration-500" />
-            </Button>
-          </div>
+  const renderDashboard = () => (
+    <div className="space-y-10">
+      {/* Welcome Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+        <div className="space-y-2">
+          <p className="text-[10px] font-black text-brand-600 uppercase tracking-[0.3em]">Command Center</p>
+          <h2 className="text-4xl font-black text-slate-900 tracking-tighter italic">Welcome, {profile?.name?.split(' ')[0] || 'Client'}</h2>
+          <p className="text-slate-500 text-sm font-medium">Your financial overview is up to date.</p>
         </div>
-        
-        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-brand-400/20 rounded-full blur-[100px]"></div>
-        <div className="absolute -top-24 -right-24 w-64 h-64 bg-white/10 rounded-full blur-[80px]"></div>
+        <div className="flex gap-3">
+          <Button onClick={() => onNavigate('loans')} className="bg-slate-900 hover:bg-brand-600 text-white rounded-2xl h-14 px-8 font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-slate-900/10">
+            APPLY FOR LOAN <Plus size={16} className="ml-2" />
+          </Button>
+          <Button onClick={() => onNavigate('repayments')} variant="outline" className="border-2 border-slate-200 hover:border-slate-300 rounded-2xl h-14 px-8 font-black text-xs uppercase tracking-widest text-slate-900 transition-all bg-white">
+            REPAY MONEY <ArrowUpRight size={16} className="ml-2" />
+          </Button>
+        </div>
       </div>
 
-      <div className="flex gap-2 p-1.5 bg-slate-100 rounded-3xl w-fit">
-        <button 
-          onClick={() => setActiveTab('loans')}
-          className={`flex items-center gap-2 px-10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'loans' ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400 hover:text-slate-600'}`}
-        >
-          <CreditCard size={14} /> My Facilities
-        </button>
-        <button 
-          onClick={() => setActiveTab('receipts')}
-          className={`flex items-center gap-2 px-10 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'receipts' ? 'bg-white text-slate-900 shadow-xl' : 'text-slate-400 hover:text-slate-600'}`}
-        >
-          <FileText size={14} /> Receipts Center
-        </button>
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="p-8 rounded-[2.5rem] border-none bg-brand-600 text-white shadow-2xl shadow-brand-500/20 relative overflow-hidden group">
+          <div className="relative z-10 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
+              <Wallet size={24} />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Active Balance</p>
+              <p className="text-3xl font-black tracking-tighter mt-1">MWK {totalLoanBalance.toLocaleString()}</p>
+            </div>
+            <div className="pt-2">
+              <Badge className="bg-white/10 text-white border-none font-bold text-[8px] uppercase tracking-widest px-3 py-1">
+                {activeLoans.length} Active {activeLoans.length === 1 ? 'Facility' : 'Facilities'}
+              </Badge>
+            </div>
+          </div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:scale-110 transition-transform duration-700"></div>
+        </Card>
+
+        <Card className="p-8 rounded-[2.5rem] border-none bg-slate-900 text-white shadow-2xl shadow-slate-900/20 relative overflow-hidden group">
+          <div className="relative z-10 space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
+              <Calendar size={24} />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Next Payment Due</p>
+              <p className="text-3xl font-black tracking-tighter mt-1">
+                {nextPayment ? new Date(nextPayment.nextDueDate).toLocaleDateString() : 'None'}
+              </p>
+            </div>
+            <div className="pt-2">
+              <p className="text-[9px] font-black uppercase text-brand-400 tracking-widest">
+                {nextPayment ? `MWK ${nextPayment.repaymentAmount?.toLocaleString()} Pending` : 'All caught up'}
+              </p>
+            </div>
+          </div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-brand-500/10 rounded-full -ml-16 -mb-16 blur-2xl"></div>
+        </Card>
+
+        <Card className="p-8 rounded-[2.5rem] border border-slate-100 bg-white shadow-xl shadow-slate-500/5 flex flex-col justify-between">
+           <div className="space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <ShieldCheck size={24} />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">KYC Status</p>
+              <p className="text-2xl font-black text-slate-900 tracking-tight mt-1">
+                {profile?.kycComplete ? 'Verified' : 'Incomplete'}
+              </p>
+            </div>
+          </div>
+          {!profile?.kycComplete && (
+            <Button onClick={() => onNavigate('profile')} variant="link" className="text-brand-600 p-0 h-auto font-black text-[10px] uppercase tracking-widest justify-start mt-4">
+              Finish Setup <ArrowRight size={12} className="ml-1" />
+            </Button>
+          )}
+        </Card>
       </div>
 
-      {activeTab === 'loans' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {activeLoans.length === 0 ? (
-            <Card className="col-span-full border-dashed border-2 py-32 flex flex-col items-center justify-center text-slate-300 rounded-[3.5rem] bg-slate-50/50">
-              <div className="w-20 h-20 rounded-full bg-white shadow-sm flex items-center justify-center mb-6 grayscale opacity-30">
-                <Zap size={40} />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Recent Activity */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="flex justify-between items-center px-4">
+            <h3 className="text-xl font-black text-slate-900 tracking-tight italic uppercase">Recent Activity</h3>
+            <button onClick={() => onNavigate('receipts')} className="text-[10px] font-black text-slate-400 hover:text-brand-600 uppercase tracking-widest transition-colors">View All History</button>
+          </div>
+          <Card className="rounded-[2.5rem] overflow-hidden border border-slate-100 shadow-sm bg-white">
+            {receipts.length === 0 ? (
+              <div className="p-16 text-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-slate-50 flex items-center justify-center mx-auto text-slate-200">
+                  <Activity size={32} />
+                </div>
+                <p className="text-sm text-slate-400 font-medium">No recent transactions recorded.</p>
               </div>
-              <p className="font-black uppercase tracking-[0.3em] text-[10px] mb-2 text-slate-400">Registry Is Empty</p>
-              <p className="text-sm font-medium text-slate-400 italic">Initiate a facility application to begin.</p>
-            </Card>
-          ) : (
-            activeLoans.map(loan => (
-              <Card key={loan.id} className="p-10 rounded-[3rem] border border-slate-100 shadow-xl hover:shadow-2xl hover:border-brand-500/10 transition-all group relative overflow-hidden bg-white">
-                <div className="flex justify-between items-start mb-10">
-                   <div className="flex items-center gap-6">
-                      <div className="w-20 h-20 rounded-[2rem] bg-slate-50 flex items-center justify-center text-slate-900 group-hover:bg-brand-50 group-hover:text-brand-600 transition-all group-hover:rotate-6 duration-500">
-                        <Briefcase size={32} />
+            ) : (
+              <div className="divide-y divide-slate-50">
+                {receipts.slice(0, 5).map(rcpt => (
+                  <div key={rcpt.id} className="p-6 flex items-center justify-between hover:bg-slate-50/50 transition-colors cursor-pointer group" onClick={() => onViewReceipt(rcpt)}>
+                    <div className="flex items-center gap-6">
+                      <div className="w-12 h-12 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-brand-50 group-hover:text-brand-600 transition-all">
+                        <History size={20} />
                       </div>
                       <div>
-                        <h3 className="text-2xl font-black text-slate-900 tracking-tighter">{loan.productName}</h3>
-                        <p className="text-[10px] font-black text-brand-600 uppercase tracking-widest">ID: {loan.id.slice(-10).toUpperCase()}</p>
+                        <p className="font-bold text-slate-900 text-sm">{rcpt.transactionType.replace(/_/g, ' ')}</p>
+                        <p className="text-[10px] text-slate-400 font-medium tracking-wide uppercase">{new Date(rcpt.date).toLocaleDateString()} &bull; {rcpt.receiptId}</p>
                       </div>
-                   </div>
-                   <Badge className="bg-emerald-50 text-emerald-600 border-none font-black text-[10px] px-4 py-2 rounded-2xl uppercase tracking-widest shadow-sm">ACTIVE FACILITY</Badge>
-                </div>
-
-                <div className="space-y-8 mb-10">
-                   <div className="grid grid-cols-2 gap-8">
-                      <div className="space-y-1">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Outstanding</p>
-                        <p className="text-3xl font-black text-slate-900 tracking-tighter">MWK {(loan.outstandingBalance || 0).toLocaleString()}</p>
-                      </div>
-                      <div className="space-y-1 text-right">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Next Payment</p>
-                        <p className="text-sm font-black text-brand-600 italic">{loan.nextDueDate ? new Date(loan.nextDueDate).toLocaleDateString() : 'N/A'}</p>
-                      </div>
-                   </div>
-
-                   <div className="space-y-3">
-                      <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
-                        <span>Liquidation Progress</span>
-                        <span className="text-slate-900">{Math.round(((loan.amount - loan.outstandingBalance) / loan.amount) * 100)}%</span>
-                      </div>
-                      <div className="w-full bg-slate-100 h-6 rounded-full overflow-hidden p-1.5 border border-slate-100">
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: `${Math.min(100, ((loan.amount - loan.outstandingBalance) / loan.amount) * 100)}%` }}
-                          className="h-full bg-brand-500 rounded-full shadow-lg shadow-brand-500/20"
-                        />
-                      </div>
-                   </div>
-                </div>
-
-                <Button 
-                  onClick={() => onPay(loan)}
-                  className="w-full h-16 rounded-2.5xl bg-slate-900 hover:bg-brand-600 text-white font-black text-sm tracking-tight transition-all gap-3 shadow-xl"
-                >
-                  SETTLE INSTALLMENT <DollarSign size={18} />
-                </Button>
-                
-                <div className="absolute top-0 right-0 w-48 h-48 bg-slate-50 rounded-full -mr-32 -mt-32 group-hover:bg-brand-50/50 transition-colors duration-700"></div>
-              </Card>
-            ))
-          )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-4">
-          {receipts.length === 0 ? (
-            <Card className="py-32 flex flex-col items-center justify-center text-slate-300 rounded-[3rem] bg-slate-50/50 border-dashed border-2">
-              <div className="w-20 h-20 rounded-full bg-white shadow-sm flex items-center justify-center mb-6 grayscale opacity-20">
-                <FileDown size={40} />
-              </div>
-              <p className="font-black uppercase tracking-[0.3em] text-[10px] mb-2 text-slate-400">No Records On File</p>
-              <p className="text-sm font-medium text-slate-400">Official receipts appear here after transaction verification.</p>
-            </Card>
-          ) : (
-            receipts.map(rcpt => (
-              <Card key={rcpt.id} className="p-8 rounded-[2rem] border border-slate-100 hover:border-brand-500/10 transition-all group flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white shadow-sm hover:shadow-xl group">
-                <div className="flex items-center gap-6">
-                  <div className="w-16 h-16 rounded-2.5xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-brand-50 group-hover:text-brand-600 transition-all font-black text-xl italic">
-                    RC
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-black text-slate-900 tracking-tighter text-lg uppercase">{rcpt.transactionType.replace(/_/g, ' ')}</h3>
-                      <Badge className="bg-emerald-50 text-emerald-600 text-[8px] font-black px-2 py-0.5 rounded-lg border-none shadow-sm">{rcpt.status}</Badge>
                     </div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <span className="text-brand-600">{rcpt.receiptId}</span> ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {new Date(rcpt.date).toLocaleDateString()} at {new Date(rcpt.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                    <div className="text-right">
+                      <p className="font-black text-slate-900 tabular-nums">MWK {rcpt.amount.toLocaleString()}</p>
+                      <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Verified</p>
+                    </div>
                   </div>
-                </div>
-                
-                <div className="flex items-center gap-10">
-                  <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Verified</p>
-                    <p className="text-xl font-black text-slate-900 tracking-tighter">MWK {rcpt.amount.toLocaleString()}</p>
+                ))}
+              </div>
+            )}
+          </Card>
+        </div>
+
+        {/* Notifications Preview */}
+        <div className="space-y-6">
+          <div className="flex justify-between items-center px-4">
+            <h3 className="text-xl font-black text-slate-900 tracking-tight italic uppercase">Alerts</h3>
+            <button onClick={() => onNavigate('notifications')} className="text-[10px] font-black text-slate-400 hover:text-brand-600 uppercase tracking-widest transition-colors">Inbox</button>
+          </div>
+          <Card className="rounded-[2.5rem] p-8 border border-slate-100 shadow-sm bg-slate-50 space-y-6">
+             {notifications.length === 0 ? (
+               <div className="py-8 text-center space-y-3">
+                  <div className="w-12 h-12 rounded-full border-2 border-slate-200 flex items-center justify-center mx-auto text-slate-300">
+                    <BellRing size={20} />
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    className="h-12 px-6 rounded-xl border-slate-200 font-bold text-[10px] uppercase tracking-widest hover:bg-slate-900 hover:text-white transition-all shadow-sm group"
-                    onClick={() => {
-                        onViewReceipt(rcpt);
-                    }}
-                  >
-                    VIEW RECEIPT <ArrowRight size={14} className="ml-2 group-hover:translate-x-1 transition-transform" />
+                  <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">No New Alerts</p>
+               </div>
+             ) : (
+                notifications.slice(0, 3).map(n => (
+                  <div key={n.id} className="space-y-2 group cursor-pointer" onClick={() => onNavigate('notifications')}>
+                    <div className="flex justify-between items-start">
+                      <p className="text-xs font-black text-slate-900 group-hover:text-brand-600 transition-colors line-clamp-1">{n.title}</p>
+                      {!n.isRead && <div className="w-2 h-2 rounded-full bg-brand-500 shadow-lg shadow-brand-500/50" />}
+                    </div>
+                    <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">{n.message}</p>
+                    <p className="text-[9px] text-slate-400 font-medium">{new Date(n.createdAt?.toDate ? n.createdAt.toDate() : n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                  </div>
+                ))
+             )}
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderLoans = () => (
+    <div className="space-y-8">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-black text-slate-900 tracking-tighter italic">Loan Management</h2>
+        <div className="flex gap-1.5 p-1 bg-slate-100 rounded-2xl">
+          {(['my', 'apply', 'status', 'schedule'] as const).map(tab => (
+            <button 
+              key={tab}
+              onClick={() => setLoanSubTab(tab)}
+              className={`px-6 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${loanSubTab === tab ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+            >
+              {tab === 'my' ? 'My Loans' : tab === 'apply' ? 'New Request' : tab === 'status' ? 'Tracking' : 'Schedule'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <AnimatePresence mode="wait">
+        {loanSubTab === 'my' && (
+          <motion.div key="my" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {activeLoans.length === 0 ? (
+              <Card className="col-span-full py-32 border-dashed border-2 flex flex-col items-center justify-center text-slate-300 rounded-[3rem] bg-slate-50/10">
+                <p className="font-black uppercase tracking-widest text-xs">No active facilities found</p>
+              </Card>
+            ) : (
+              activeLoans.map(loan => (
+                <Card key={loan.id} className="p-8 rounded-[3rem] border border-slate-100 shadow-lg hover:shadow-2xl transition-all group relative overflow-hidden bg-white">
+                  <div className="flex justify-between items-start mb-8">
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900 tracking-tight italic">{loan.productName}</h3>
+                      <p className="text-[10px] font-black text-brand-600 uppercase tracking-widest mt-1">Ref: {loan.id.slice(-8).toUpperCase()}</p>
+                    </div>
+                    <Badge className="bg-emerald-50 text-emerald-600 border-none px-4 py-1.5 rounded-full font-black text-[9px] uppercase tracking-widest">ACTIVE</Badge>
+                  </div>
+                  <div className="grid grid-cols-2 gap-6 mb-8">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Balance</p>
+                      <p className="text-2xl font-black text-slate-900 tabular-nums">MWK {loan.outstandingBalance?.toLocaleString()}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Next Due</p>
+                      <p className="text-sm font-black text-brand-600 italic">{new Date(loan.nextDueDate).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <Button onClick={() => onPay(loan)} className="w-full h-14 bg-slate-900 hover:bg-brand-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl">
+                    MAKE REPAYMENT <DollarSign size={16} className="ml-2" />
+                  </Button>
+                </Card>
+              ))
+            )}
+          </motion.div>
+        )}
+
+        {loanSubTab === 'apply' && (
+          <motion.div key="apply" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8">
+            <div className="flex items-center justify-between mb-8">
+               <h3 className="text-2xl font-black text-slate-900 tracking-tighter">Institutional Credit Application</h3>
+               <Button onClick={() => setLoanSubTab('my')} variant="ghost" className="rounded-xl font-bold uppercase text-[10px] tracking-widest text-slate-400">Back to Portfolio</Button>
+            </div>
+            
+            <Card className="p-10 rounded-[3rem] border border-slate-100 bg-white shadow-2xl shadow-slate-200/50">
+              <ApplicationsView 
+                clients={clients}
+                applications={applications}
+                role="CLIENT"
+                sessionProfile={profile}
+                uploadDocument={uploadDocument}
+              />
+            </Card>
+          </motion.div>
+        )}
+
+        {loanSubTab === 'status' && (
+          <motion.div key="status" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+             {loans.filter(l => l.status !== 'ACTIVE' && l.status !== 'CLOSED').length === 0 ? (
+               <div className="py-20 text-center text-slate-300">
+                 <p className="font-bold uppercase tracking-widest text-[10px]">No pending applications</p>
+               </div>
+             ) : (
+                loans.filter(l => l.status !== 'ACTIVE' && l.status !== 'CLOSED').map(loan => (
+                  <Card key={loan.id} className="p-6 rounded-3xl border border-slate-100 flex items-center justify-between bg-white shadow-sm">
+                    <div className="flex items-center gap-6">
+                       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${loan.status === 'SUBMITTED' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
+                          <Clock size={24} />
+                       </div>
+                       <div>
+                         <p className="font-black text-slate-900">{loan.productName} Request</p>
+                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Submitted {new Date(loan.createdAt).toLocaleDateString()}</p>
+                       </div>
+                    </div>
+                    <div className="flex items-center gap-8">
+                       <SLAStatusIndicator submittedAt={loan.createdAt} />
+                       <Badge className="bg-slate-100 text-slate-600 border-none font-black text-[9px] uppercase tracking-widest px-4 py-2 rounded-xl">{loan.status}</Badge>
+                    </div>
+                  </Card>
+                ))
+             )}
+          </motion.div>
+        )}
+
+        {loanSubTab === 'schedule' && (
+          <motion.div key="schedule" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+               {activeLoans.map(loan => (
+                 <Card key={loan.id} className="p-8 rounded-[2.5rem] border border-slate-100 bg-white">
+                    <h4 className="font-black text-slate-900 uppercase tracking-widest text-[10px] mb-6 border-b border-slate-50 pb-4">Repayment Timeline: {loan.productName}</h4>
+                    <div className="space-y-6">
+                       <div className="flex justify-between items-center">
+                         <p className="text-xs font-bold text-slate-500">Principal + Interest</p>
+                         <p className="font-black text-slate-900 tabular-nums">MWK {loan.amount.toLocaleString()}</p>
+                       </div>
+                       <div className="flex justify-between items-center">
+                         <p className="text-xs font-bold text-slate-500">Term Duration</p>
+                         <p className="font-black text-slate-900 uppercase tracking-widest text-[10px]">{loan.tenureMonths} Months</p>
+                       </div>
+                       <div className="flex justify-between items-center">
+                         <p className="text-xs font-bold text-slate-500">Frequency</p>
+                         <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest border-slate-200">{loan.repaymentFrequency}</Badge>
+                       </div>
+                       <div className="pt-4 border-t border-slate-50 flex justify-between items-center">
+                         <p className="text-xs font-bold text-slate-900">Calculated Installment</p>
+                         <p className="text-lg font-black text-brand-600 tabular-nums">MWK {loan.repaymentAmount?.toLocaleString()}</p>
+                       </div>
+                    </div>
+                 </Card>
+               ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+
+  const renderRepayments = () => (
+    <div className="space-y-10">
+      <div className="space-y-2">
+        <h2 className="text-3xl font-black text-slate-900 tracking-tighter italic">Secure Repayments</h2>
+        <p className="text-slate-500 font-medium">Return funds to maintain your credit health and increase future limits.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card className="p-10 rounded-[3rem] border-none bg-slate-900 text-white shadow-2xl relative overflow-hidden">
+          <div className="relative z-10 space-y-8">
+            <div className="w-16 h-16 rounded-2.5xl bg-white/10 flex items-center justify-center">
+              <Zap className="text-brand-400" size={32} />
+            </div>
+            <div>
+              <h3 className="text-2xl font-black tracking-tight italic">Instant Liquidation</h3>
+              <p className="text-slate-400 text-sm mt-1">Direct integration with Paychangu for automated verification.</p>
+            </div>
+            <div className="space-y-4">
+              {activeLoans.map(loan => (
+                <div key={loan.id} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-brand-400">{loan.productName}</p>
+                    <p className="text-lg font-black tabular-nums">MWK {loan.outstandingBalance?.toLocaleString()}</p>
+                  </div>
+                  <Button onClick={() => onPay(loan)} className="bg-brand-500 hover:bg-brand-600 text-white rounded-xl h-12 px-6 font-black text-[9px] uppercase tracking-widest">
+                    PAY NOW
                   </Button>
                 </div>
-              </Card>
-            ))
-          )}
+              ))}
+            </div>
+          </div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-brand-500/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+        </Card>
+
+        <div className="space-y-6">
+          <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest px-4">Manual Proof Submission</h4>
+          <Card className="p-8 rounded-[3rem] border border-slate-100 bg-white space-y-6 text-center">
+             <div className="w-20 h-20 rounded-[2.5rem] bg-slate-50 flex items-center justify-center mx-auto text-slate-400">
+                <FileCheck size={32} />
+             </div>
+             <div className="space-y-2">
+               <p className="font-black text-slate-900">Paid via Bank or Cash?</p>
+               <p className="text-xs text-slate-500 font-medium">Upload your deposit slip or screenshots for manual reconciliation by our finance team.</p>
+             </div>
+             <Button variant="outline" className="w-full h-14 border-2 border-slate-100 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-50">
+               SUBMIT PROOF OF PAYMENT
+             </Button>
+          </Card>
         </div>
-      )}
+      </div>
     </div>
+  );
+
+  const renderReceipts = () => (
+    <div className="space-y-8">
+      <div className="flex justify-between items-end">
+        <div className="space-y-2">
+          <h2 className="text-3xl font-black text-slate-900 tracking-tighter italic">The Vault</h2>
+          <p className="text-slate-500 font-medium">Your historical financial proofs, verified and immutable.</p>
+        </div>
+        <div className="flex gap-2">
+           <div className="relative h-12 w-64">
+             <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+             <Input className="pl-10 h-full rounded-2xl border-2 border-slate-100 focus:border-brand-500 text-xs font-bold" placeholder="Search Receipt ID..." />
+           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        {receipts.length === 0 ? (
+          <div className="py-32 text-center text-slate-300">
+             <FileDown size={48} className="mx-auto mb-4 opacity-30" />
+             <p className="font-bold uppercase tracking-widest text-[10px]">Registry is empty</p>
+          </div>
+        ) : (
+          receipts.map(rcpt => (
+            <Card key={rcpt.id} className="p-6 rounded-[2.5rem] border border-slate-100 bg-white hover:shadow-xl transition-all group flex items-center justify-between gap-6">
+              <div className="flex items-center gap-6">
+                <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-400 group-hover:bg-brand-50 group-hover:text-brand-600 flex items-center justify-center font-black text-xs italic transition-all">
+                  RCPT
+                </div>
+                <div>
+                  <div className="flex items-center gap-3">
+                    <h4 className="font-black text-slate-900 uppercase text-sm">{rcpt.transactionType.replace(/_/g, ' ')}</h4>
+                    <Badge className="bg-emerald-50 text-emerald-600 border-none px-3 py-1 font-black text-[7px] tracking-widest uppercase">VERIFIED</Badge>
+                  </div>
+                  <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-1">{rcpt.receiptId} &bull; {new Date(rcpt.date).toLocaleDateString()}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-8">
+                 <div className="text-right">
+                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Amount</p>
+                    <p className="text-xl font-black text-slate-900 tabular-nums">MWK {rcpt.amount.toLocaleString()}</p>
+                 </div>
+                 <div className="flex gap-2">
+                    <Button onClick={() => onViewReceipt(rcpt)} variant="outline" size="icon" className="w-12 h-12 rounded-xl border-slate-100 hover:bg-slate-900 hover:text-white transition-all">
+                       <ArrowRight size={18} />
+                    </Button>
+                    <Button variant="outline" size="icon" className="w-12 h-12 rounded-xl border-slate-100 hover:bg-slate-900 hover:text-white transition-all">
+                       <Download size={18} />
+                    </Button>
+                 </div>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+    </div>
+  );
+
+  const renderNotifications = () => (
+    <div className="space-y-8">
+      <div className="space-y-2">
+        <h2 className="text-3xl font-black text-slate-900 tracking-tighter italic">Notifications</h2>
+        <p className="text-slate-500 font-medium">Keep track of status changes and institutional alerts.</p>
+      </div>
+
+      <Card className="rounded-[3rem] border border-slate-100 bg-white overflow-hidden shadow-sm">
+        {notifications.length === 0 ? (
+          <div className="py-32 text-center text-slate-300">
+            <BellRing size={48} className="mx-auto mb-4 opacity-20" />
+            <p className="font-bold uppercase tracking-widest text-[10px]">No notifications yet</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-50">
+            {notifications.map(n => (
+              <div key={n.id} className={`p-8 hover:bg-slate-50/50 transition-colors flex items-start gap-8 ${!n.isRead ? 'bg-brand-50/10 border-l-4 border-brand-500' : ''}`}>
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${!n.isRead ? 'bg-brand-100 text-brand-600' : 'bg-slate-100 text-slate-400'}`}>
+                  <Bell size={24} />
+                </div>
+                <div className="flex-1 space-y-2">
+                   <div className="flex justify-between items-center">
+                     <h4 className={`text-lg font-black tracking-tight ${!n.isRead ? 'text-slate-900' : 'text-slate-600'}`}>{n.title}</h4>
+                     <p className="text-[10px] text-slate-400 font-bold uppercase">{new Date(n.createdAt?.toDate ? n.createdAt.toDate() : n.createdAt).toLocaleString()}</p>
+                   </div>
+                   <p className="text-slate-500 text-sm leading-relaxed max-w-3xl">{n.message}</p>
+                   <div className="pt-2 flex gap-4">
+                      <button className="text-[9px] font-black text-brand-600 uppercase tracking-[0.2em] hover:underline">Mark as Read</button>
+                      <button className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] hover:underline">Delete</button>
+                   </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+
+  const renderProfile = () => (
+    <div className="space-y-10">
+      <div className="space-y-2">
+        <h2 className="text-3xl font-black text-slate-900 tracking-tighter italic">Identity Hub</h2>
+        <p className="text-slate-500 font-medium">Maintain your KYC profile to ensure continued access to lending facilities.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <Card className="lg:col-span-2 p-10 rounded-[3rem] border border-slate-100 bg-white space-y-10">
+          <div className="flex items-center gap-8 border-b border-slate-50 pb-8">
+             <div className="relative group">
+               <Avatar className="h-24 w-24 rounded-[2rem] border-4 border-white shadow-2xl transition-transform group-hover:scale-105">
+                  <AvatarImage src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${avatarSeed || profile?.id}`} />
+               </Avatar>
+               {isEditingProfile && (
+                 <button 
+                   onClick={() => setAvatarSeed(Math.random().toString(36).substring(7))}
+                   className="absolute -bottom-2 -right-2 bg-brand-600 text-white p-2 rounded-xl shadow-lg hover:bg-brand-700 transition-colors"
+                   title="Refresh Avatar"
+                 >
+                   <RefreshCw size={14} />
+                 </button>
+               )}
+             </div>
+             <div>
+               <h3 className="text-2xl font-black text-slate-900 tracking-tight italic">{isEditingProfile ? 'Editing Persona' : profile?.name}</h3>
+               <p className="text-[10px] font-black text-brand-600 uppercase tracking-widest mt-1">Unique Persona ID: {profile?.id.toUpperCase()}</p>
+               <div className="inline-flex items-center gap-2 mt-4 bg-emerald-50 text-emerald-600 px-4 py-1.5 rounded-full border border-emerald-100">
+                  <ShieldCheck size={14} />
+                  <span className="text-[9px] font-black uppercase tracking-widest">Identity Verified</span>
+               </div>
+             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+             <div className="space-y-2">
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Full Name (Legal)</label>
+               {isEditingProfile ? (
+                 <Input 
+                   value={editName} 
+                   onChange={(e) => setEditName(e.target.value)} 
+                   className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 font-bold" 
+                 />
+               ) : (
+                 <Input readOnly value={profile?.name || ''} className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold" />
+               )}
+             </div>
+             <div className="space-y-2">
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email Address</label>
+               <Input readOnly value={profile?.email || ''} className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold" />
+               <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-1 ml-1 cursor-not-allowed">Email cannot be changed</p>
+             </div>
+             <div className="space-y-2">
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Phone Number</label>
+               {isEditingProfile ? (
+                 <Input 
+                   value={editPhone} 
+                   onChange={(e) => setEditPhone(e.target.value)} 
+                   className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 font-bold" 
+                 />
+               ) : (
+                 <Input readOnly value={profile?.phone || ''} className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold" />
+               )}
+             </div>
+             <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Residential Location</label>
+              <div className="relative">
+                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                {isEditingProfile ? (
+                  <Input 
+                    value={editAddress} 
+                    onChange={(e) => setEditAddress(e.target.value)} 
+                    className="pl-12 h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 font-bold" 
+                  />
+                ) : (
+                  <Input readOnly value={profile?.address || 'Blantyre Municipal'} className="pl-12 h-14 rounded-2xl bg-slate-50 border-transparent font-bold" />
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="pt-4 flex justify-between items-center bg-slate-50 -mx-10 -mb-10 p-10 rounded-b-[3rem]">
+            <p className="text-xs text-slate-500 font-medium italic">
+              {isEditingProfile ? 'Carefully review changes before saving.' : 'Contact support to update restricted legal identifiers.'}
+            </p>
+            {isEditingProfile ? (
+              <div className="flex gap-3">
+                <Button 
+                  onClick={() => setIsEditingProfile(false)} 
+                  variant="outline" 
+                  disabled={isSavingProfile}
+                  className="rounded-xl h-12 px-8 font-black text-[10px] uppercase tracking-widest border-2 border-slate-200"
+                >
+                  CANCEL
+                </Button>
+                <Button 
+                  onClick={handleSaveProfile} 
+                  disabled={isSavingProfile}
+                  className="bg-brand-600 hover:bg-brand-700 text-white rounded-xl h-12 px-8 font-black text-[10px] uppercase tracking-widest shadow-lg shadow-brand-500/20"
+                >
+                  {isSavingProfile ? 'SAVING...' : 'SAVE CHANGES'}
+                </Button>
+              </div>
+            ) : (
+              <Button 
+                onClick={() => {
+                  setEditName(profile?.name || '');
+                  setEditPhone(profile?.phone || '');
+                  setIsEditingProfile(true);
+                }} 
+                className="bg-slate-900 hover:bg-brand-600 text-white rounded-xl h-12 px-8 font-black text-[10px] uppercase tracking-widest transition-all"
+              >
+                EDIT PROFILE <Edit size={14} className="ml-2" />
+              </Button>
+            )}
+          </div>
+        </Card>
+
+        <div className="space-y-6">
+           <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest px-4">KYC Documents</h4>
+           <Card className="p-8 rounded-[3rem] border border-slate-100 bg-white space-y-6">
+              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
+                 <div className="flex items-center gap-4">
+                   <FileText className="text-emerald-600" size={20} />
+                   <p className="text-xs font-black text-emerald-900">National ID</p>
+                 </div>
+                 <Badge className="bg-emerald-600 text-white border-none text-[8px] font-black uppercase">LINKED</Badge>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between grayscale opacity-50">
+                 <div className="flex items-center gap-4">
+                   <Smartphone className="text-slate-600" size={20} />
+                   <p className="text-xs font-black text-slate-900">Proof of Residence</p>
+                 </div>
+                 <Badge variant="outline" className="text-[8px] font-black uppercase">MISSING</Badge>
+              </div>
+              <Button onClick={() => onNavigate('settings')} variant="outline" className="w-full h-12 rounded-xl border-2 border-slate-100 font-black text-[9px] uppercase tracking-widest">
+                 UPLOAD DOCUMENTS
+              </Button>
+           </Card>
+        </div>
+      </div>
+    </div>
+  );
+
+
+  const renderSettings = () => (
+    <div className="space-y-10">
+      <div className="space-y-2">
+        <h2 className="text-3xl font-black text-slate-900 tracking-tighter italic">Terminal Controls</h2>
+        <p className="text-slate-500 font-medium">Fine-tune your institutional interface and security parameters.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card className="p-10 rounded-[3rem] border border-slate-100 bg-white space-y-10">
+          <div>
+            <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <Zap size={20} className="text-brand-600" /> Interaction Preferences
+            </h3>
+            <p className="text-slate-400 text-xs font-medium mt-1">Configure how FastKwacha communicates with you.</p>
+          </div>
+
+          <div className="space-y-6">
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+              <div>
+                <p className="text-sm font-bold text-slate-900">Push Notifications</p>
+                <p className="text-[10px] text-slate-500 font-medium">Instant alerts for disbursement and due dates.</p>
+              </div>
+              <Switch 
+                checked={settings.notifications} 
+                onCheckedChange={(v) => onUpdateSettings({ ...settings, notifications: v })}
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-4 border border-slate-100 rounded-2xl">
+              <div>
+                <p className="text-sm font-bold text-slate-900">Marketing Communications</p>
+                <p className="text-[10px] text-slate-500 font-medium">Receive personalized offers and credit limit upgrades.</p>
+              </div>
+              <Switch 
+                checked={settings.marketing} 
+                onCheckedChange={(v) => onUpdateSettings({ ...settings, marketing: v })}
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-slate-900 text-white rounded-2xl shadow-xl shadow-slate-900/20">
+              <div>
+                <p className="text-sm font-bold">Biometric Authentication</p>
+                <p className="text-[10px] text-slate-400 font-medium">Use face or fingerprint to authorize payments.</p>
+              </div>
+              <Switch 
+                checked={settings.twoFactor} 
+                onCheckedChange={(v) => onUpdateSettings({ ...settings, twoFactor: v })}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-10 rounded-[3rem] border border-slate-100 bg-white space-y-10">
+          <div>
+            <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+              <Lock size={20} className="text-red-600" /> Security Rotation
+            </h3>
+            <p className="text-slate-400 text-xs font-medium mt-1">Institutional security requires regular password rotation.</p>
+          </div>
+
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">New Secure Password</label>
+              <Input 
+                type="password" 
+                placeholder="Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢" 
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold" 
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Confirm New Password</label>
+              <Input 
+                type="password" 
+                placeholder="Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢" 
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="h-14 rounded-2xl bg-slate-50 border-transparent font-bold" 
+              />
+            </div>
+            <Button 
+              onClick={handleChangePassword}
+              disabled={isChangingPassword || !newPassword}
+              className="w-full bg-red-600 hover:bg-red-700 text-white rounded-2xl h-14 font-black text-xs uppercase tracking-widest shadow-xl shadow-red-500/20"
+            >
+              {isChangingPassword ? 'CONSOLIDATING...' : 'UPDATE SECURITY POOL'}
+            </Button>
+
+            <div className="p-6 bg-red-50 rounded-2xl border border-red-100 italic">
+               <p className="text-[10px] text-red-600 font-bold leading-relaxed">
+                 Warning: For institutional security, changing your password may require re-authentication if your session is older than 5 minutes.
+               </p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }} 
+      animate={{ opacity: 1 }} 
+      exit={{ opacity: 0 }}
+      className="max-w-[1400px] mx-auto pb-20"
+    >
+      {view === 'dashboard' && renderDashboard()}
+      {view === 'loans' && renderLoans()}
+      {view === 'repayments' && renderRepayments()}
+      {view === 'receipts' && renderReceipts()}
+      {view === 'notifications' && renderNotifications()}
+      {view === 'profile' && renderProfile()}
+      {view === 'settings' && renderSettings()}
+    </motion.div>
   );
 }
