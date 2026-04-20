@@ -820,8 +820,21 @@ const createNotification = async (
       metadata: metadata || {}
     } as NotificationRecord);
   } catch (e) {
-    // Notifications are non-critical; swallow errors silently
     console.warn('[Phase5] createNotification failed:', e);
+    saveLocalNotificationRecord({
+      id: `local-notification-${Date.now()}`,
+      type,
+      title,
+      message,
+      targetRole,
+      loanId,
+      applicationId,
+      clientId: metadata?.clientId,
+      targetEmail: metadata?.targetEmail,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+      metadata: metadata || {},
+    });
   }
 };
 
@@ -1283,6 +1296,7 @@ const LOCAL_TRANSACTIONS_KEY = 'fastkwacha_local_transactions';
 const LOCAL_WORKFLOW_HISTORY_KEY = 'fastkwacha_local_workflow';
 const LOCAL_REPAYMENT_SCHEDULE_KEY = 'fastkwacha_local_schedule';
 const LOCAL_LOAN_PRODUCTS_KEY = 'fastkwacha_local_products';
+const LOCAL_NOTIFICATIONS_KEY = 'fastkwacha-local-notifications';
 const LOCAL_DATA_UPDATED_EVENT = 'fastkwacha-local-data-updated';
 
 const getLocalUsers = (): AuthProfile[] => {
@@ -1437,6 +1451,24 @@ const getLocalLoanProducts = (): LoanProduct[] => {
   }
 };
 
+const getLocalReceiptRecords = (): ReceiptRecord[] => {
+  try {
+    const data = localStorage.getItem(LOCAL_RECEIPTS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+};
+
+const getLocalNotifications = (): NotificationRecord[] => {
+  try {
+    const data = localStorage.getItem(LOCAL_NOTIFICATIONS_KEY);
+    return data ? JSON.parse(data) : [];
+  } catch {
+    return [];
+  }
+};
+
 const mergeFirestoreWithLocal = <T extends { id?: string }>(firestoreItems: T[], localItems: T[]) => {
   const firestoreIds = new Set(firestoreItems.map(item => item.id).filter(Boolean));
   const localOnly = localItems.filter(item => !item.id || !firestoreIds.has(item.id));
@@ -1492,9 +1524,26 @@ const saveLocalTransactionRecord = (transaction: any) => {
 
 const LOCAL_RECEIPTS_KEY = 'fastkwacha-local-receipts';
 const saveLocalReceiptRecord = (receipt: any) => {
-  const existing = JSON.parse(localStorage.getItem(LOCAL_RECEIPTS_KEY) || '[]');
+  const existing = getLocalReceiptRecords();
   const updated = [receipt, ...existing.filter((r: any) => r.id !== receipt.id)];
   localStorage.setItem(LOCAL_RECEIPTS_KEY, JSON.stringify(updated));
+  announceLocalDataUpdate();
+};
+
+const saveLocalNotificationRecord = (notification: NotificationRecord) => {
+  const existing = getLocalNotifications();
+  const updated = [notification, ...existing.filter((item) => item.id !== notification.id)];
+  localStorage.setItem(LOCAL_NOTIFICATIONS_KEY, JSON.stringify(updated));
+  announceLocalDataUpdate();
+};
+
+const updateLocalNotificationRecord = (notificationId: string, updater: (notification: NotificationRecord) => NotificationRecord | null) => {
+  const existing = getLocalNotifications();
+  const updated = existing
+    .map((notification) => notification.id === notificationId ? updater(notification) : notification)
+    .filter(Boolean) as NotificationRecord[];
+  localStorage.setItem(LOCAL_NOTIFICATIONS_KEY, JSON.stringify(updated));
+  announceLocalDataUpdate();
 };
 
 const saveLocalRepaymentSchedules = (schedules: any[]) => {
@@ -2168,12 +2217,24 @@ function App() {
 
     const qNotifications = query(collection(db, 'notifications'), orderBy('createdAt', 'desc'), limit(50));
     const unsubNotifications = onSnapshot(qNotifications, (snapshot) => {
-      setNotifications(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as NotificationRecord)));
-    }, (error) => console.warn('[Phase5] notifications listener error:', error));
+      setNotifications(mergeFirestoreWithLocal(
+        snapshot.docs.map(d => ({ id: d.id, ...d.data() } as NotificationRecord)),
+        getLocalNotifications()
+      ));
+    }, (error) => {
+      console.warn('[Phase5] notifications listener error:', error);
+      setNotifications(getLocalNotifications());
+    });
 
     const unsubReceipts = onSnapshot(query(collection(db, 'receipts'), orderBy('date', 'desc'), limit(50)), (snapshot) => {
-      setReceipts(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ReceiptRecord)));
-    }, (error) => console.warn('Receipts listener error:', error));
+      setReceipts(mergeFirestoreWithLocal(
+        snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ReceiptRecord)),
+        getLocalReceiptRecords()
+      ));
+    }, (error) => {
+      console.warn('Receipts listener error:', error);
+      setReceipts(getLocalReceiptRecords());
+    });
 
     const handleLocalDataUpdated = () => {
       setUsers(prev => syncItemsWithLocal(prev, getLocalUsers()));
@@ -2184,6 +2245,8 @@ function App() {
       setRepaymentSchedules(prev => syncItemsWithLocal(prev, getLocalRepaymentSchedules()));
       setLoanProducts(prev => syncItemsWithLocal(prev, getLocalLoanProducts()));
       setWorkflowHistory(prev => syncItemsWithLocal(prev, getLocalWorkflowHistory()));
+      setReceipts(prev => syncItemsWithLocal(prev, getLocalReceiptRecords()));
+      setNotifications(prev => syncItemsWithLocal(prev, getLocalNotifications()));
     };
 
     window.addEventListener(LOCAL_DATA_UPDATED_EVENT, handleLocalDataUpdated);
@@ -2882,7 +2945,7 @@ function App() {
       issuedAt: isLocal ? new Date().toISOString() : serverTimestamp(),
       date: new Date().toISOString(),
       loanId,
-      clientId: 'resolved-via-context',
+      clientId: metadata?.clientId || metadata?.resolvedClientId || 'resolved-via-context',
       clientName,
       amount,
       paymentMethod,
@@ -2916,6 +2979,35 @@ function App() {
 
   const processPaychanguWebhook = async (loanId: string, amount: number, reference: string) => {
     try {
+      const localLoan = getLocalLoans().find((loan) => loan.id === loanId);
+      if (localLoan) {
+        const success = await processRepayment(localLoan, amount, 'paychangu-gateway', 'PAYCHANGU_CARD', reference);
+        if (!success) throw new Error('Local repayment failed.');
+
+        await generateReceipt(
+          loanId,
+          'REPAYMENT',
+          reference,
+          amount,
+          'paychangu-bot',
+          localLoan.clientName || 'Valued Client',
+          'PAYCHANGU_CARD',
+          `Autonomous Paychangu fulfillment.`,
+          undefined,
+          undefined,
+          {
+            provider: 'Paychangu',
+            newBalance: Math.max(0, (localLoan.outstandingBalance || 0) - amount),
+            clientId: localLoan.clientId,
+          },
+          true,
+          `local-paychangu-${Date.now()}`
+        );
+
+        toast.success('Payment successfully processed through Paychangu!');
+        return;
+      }
+
       const loanDoc = await getDoc(doc(db, 'loans', loanId));
       if (!loanDoc.exists()) throw new Error('Loan not found');
       const loanData = loanDoc.data();
@@ -2977,7 +3069,7 @@ function App() {
         `Autonomous Paychangu fulfillment.`,
         undefined,
         undefined,
-        { provider: 'Paychangu', newBalance }
+        { provider: 'Paychangu', newBalance, clientId: loanData.clientId }
       );
 
       toast.success('Payment successfully processed through Paychangu!');
@@ -3702,42 +3794,42 @@ function App() {
                 icon={<LayoutDashboard size={16} />} 
                 label="Dashboard" 
                 active={currentView === 'dashboard'} 
-                onClick={() => setCurrentView('dashboard')}
+                onClick={() => { setCurrentView('dashboard'); setIsMobileSidebarOpen(false); }}
                 collapsed={!isSidebarOpen}
               />
               <NavItem 
                 icon={<Briefcase size={16} />} 
                 label="Loans" 
                 active={currentView === 'loans'} 
-                onClick={() => setCurrentView('loans')}
+                onClick={() => { setCurrentView('loans'); setIsMobileSidebarOpen(false); }}
                 collapsed={!isSidebarOpen}
               />
               <NavItem 
                 icon={<Zap size={16} />} 
                 label="Repayments" 
                 active={currentView === 'repayments'} 
-                onClick={() => setCurrentView('repayments')}
+                onClick={() => { setCurrentView('repayments'); setIsMobileSidebarOpen(false); }}
                 collapsed={!isSidebarOpen}
               />
               <NavItem 
                 icon={<FileText size={16} />} 
                 label="Receipts" 
                 active={currentView === 'receipts'} 
-                onClick={() => setCurrentView('receipts')}
+                onClick={() => { setCurrentView('receipts'); setIsMobileSidebarOpen(false); }}
                 collapsed={!isSidebarOpen}
               />
               <NavItem 
                 icon={<BellRing size={16} />} 
                 label="Notifications" 
                 active={currentView === 'notifications'} 
-                onClick={() => setCurrentView('notifications')}
+                onClick={() => { setCurrentView('notifications'); setIsMobileSidebarOpen(false); }}
                 collapsed={!isSidebarOpen}
               />
               <NavItem 
                 icon={<UserIcon size={16} />} 
                 label="Profile" 
                 active={currentView === 'profile'} 
-                onClick={() => setCurrentView('profile')}
+                onClick={() => { setCurrentView('profile'); setIsMobileSidebarOpen(false); }}
                 collapsed={!isSidebarOpen}
               />
             </>
@@ -3765,16 +3857,15 @@ function App() {
               </div>
             </div>
           )}
-          {role !== 'CLIENT' && (
-            <Button 
-              variant="ghost" 
-              onClick={handleLogout}
-              className="w-full justify-start gap-3 text-sidebar-foreground hover:text-white hover:bg-sidebar-accent h-9 px-2"
-            >
-              <LogOut size={16} />
-              {isSidebarOpen && <span className="text-xs">Logout</span>}
-            </Button>
-          )}
+          <Button 
+            aria-label="Logout"
+            variant="ghost" 
+            onClick={handleLogout}
+            className="w-full justify-start gap-3 text-sidebar-foreground hover:text-white hover:bg-sidebar-accent h-9 px-2"
+          >
+            <LogOut size={16} />
+            {isSidebarOpen && <span className="text-xs">Logout</span>}
+          </Button>
         </div>
       </aside>
 
@@ -3924,8 +4015,9 @@ function App() {
                     view={currentView}
                     loans={loans.filter(l => l.clientSnapshot?.email === (sessionProfile?.email || user?.email) || l.clientId === sessionProfile?.id)}
                     receipts={receipts.filter(r => r.clientId === sessionProfile?.id || loans.some(l => l.id === r.loanId && (l.clientSnapshot?.email === (sessionProfile?.email || user?.email) || l.clientId === sessionProfile?.id)))}
+                    repaymentSchedules={repaymentSchedules}
                     profile={sessionProfile}
-                    notifications={notifications.filter(n => n.clientId === sessionProfile?.id || n.targetEmail === sessionProfile?.email)}
+                    notifications={notifications}
                     onNavigate={(v) => setCurrentView(v)}
                     onPay={(loan) => {
                       setSelectedLoanForPayment(loan);
@@ -4006,7 +4098,7 @@ function App() {
                 />
               </motion.div>
             )}
-            {currentView === 'repayments' && (
+            {currentView === 'repayments' && role !== 'CLIENT' && (
               <motion.div key="repayments">
                 <RepaymentsView loans={loans} role={role} loanProducts={loanProducts} />
               </motion.div>
@@ -4049,7 +4141,7 @@ function App() {
                 <LoanProductsView products={loanProducts} />
               </motion.div>
             )}
-            {currentView === 'loans' && (
+            {currentView === 'loans' && role !== 'CLIENT' && (
               <motion.div key="loans">
                 <LoansView loans={loans} clients={clients} />
               </motion.div>
@@ -4107,6 +4199,7 @@ function App() {
                     view="settings"
                     loans={[]}
                     receipts={[]}
+                    repaymentSchedules={[]}
                     profile={sessionProfile}
                     notifications={[]}
                     onNavigate={(v) => setCurrentView(v)}
@@ -4216,7 +4309,7 @@ function ReceiptViewerModal({ receipt, isOpen, onClose }: { receipt: ReceiptReco
             <Button variant="outline" size="sm" onClick={handlePrint} className="h-11 px-6 gap-2 font-black border-slate-200 rounded-2xl hover:bg-slate-900 hover:text-white transition-all">
               <FileDown size={18} /> PRINT/PDF
             </Button>
-            <Button variant="ghost" size="icon" onClick={onClose} className="h-11 w-11 rounded-full hover:bg-slate-200 text-slate-400 Transition-all">
+            <Button aria-label="Close receipt" variant="ghost" size="icon" onClick={onClose} className="h-11 w-11 rounded-full hover:bg-slate-200 text-slate-400 Transition-all">
               <X size={20} />
             </Button>
           </div>
@@ -12107,6 +12200,7 @@ function ClientDashboardView({
   view, 
   loans, 
   receipts, 
+  repaymentSchedules,
   profile, 
   notifications,
   clients,
@@ -12122,6 +12216,7 @@ function ClientDashboardView({
   view: View,
   loans: any[], 
   receipts: ReceiptRecord[], 
+  repaymentSchedules: any[],
   profile: AuthProfile | null, 
   notifications: NotificationRecord[],
   clients: any[],
@@ -12135,6 +12230,7 @@ function ClientDashboardView({
   uploadDocument: any
 }) {
   const [loanSubTab, setLoanSubTab] = useState<'my' | 'apply' | 'status' | 'schedule'>('my');
+  const [receiptSearch, setReceiptSearch] = useState('');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editName, setEditName] = useState(profile?.name || '');
   const [editPhone, setEditPhone] = useState(profile?.phone || '');
@@ -12235,10 +12331,79 @@ function ClientDashboardView({
   };
 
   const activeLoans = loans.filter(l => l.status === 'ACTIVE');
+  const clientSchedules = repaymentSchedules.filter((schedule: any) => activeLoans.some((loan) => loan.id === schedule.loanId));
   const totalLoanBalance = loans.reduce((acc, l) => acc + (l.outstandingBalance || 0), 0);
   const nextPayment = loans
     .filter(l => l.status === 'ACTIVE' && l.nextDueDate)
     .sort((a, b) => new Date(a.nextDueDate).getTime() - new Date(b.nextDueDate).getTime())[0];
+  const searchableReceipts = receipts.filter((receipt) => {
+    const search = receiptSearch.trim().toLowerCase();
+    if (!search) return true;
+    return [
+      receipt.receiptId,
+      receipt.transactionReference,
+      receipt.clientName,
+      receipt.transactionType,
+    ].some((value) => String(value || '').toLowerCase().includes(search));
+  });
+  const clientNotificationFeed = notifications
+    .filter((notification) => {
+      if ((notification.metadata as any)?.dismissed) return false;
+      const matchesEmail = normalizeEmail(notification.targetEmail || '') === normalizeEmail(profile?.email || '');
+      const matchesClientId = Boolean(profile?.id && notification.clientId === profile.id);
+      const matchesLoan = Boolean(notification.loanId && loans.some((loan) => loan.id === notification.loanId));
+      const matchesApplication = Boolean(notification.applicationId && applications.some((application) => application.id === notification.applicationId));
+      const isClientWide = notification.targetRole === 'CLIENT' || notification.targetRole === 'ALL';
+      return matchesEmail || matchesClientId || matchesLoan || matchesApplication || isClientWide;
+    })
+    .sort((left, right) => (getTimestampDate(right.createdAt)?.getTime() || 0) - (getTimestampDate(left.createdAt)?.getTime() || 0));
+
+  const markClientNotificationAsRead = async (notification: NotificationRecord) => {
+    if (notification.isRead || !notification.id) return;
+    if (notification.id.startsWith('local-')) {
+      updateLocalNotificationRecord(notification.id, (existing) => ({ ...existing, isRead: true }));
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'notifications', notification.id), { isRead: true });
+    } catch (error) {
+      console.warn('Failed to mark remote notification as read, storing locally instead.', error);
+      saveLocalNotificationRecord({ ...notification, isRead: true });
+    }
+  };
+
+  const deleteClientNotification = async (notification: NotificationRecord) => {
+    if (!notification.id) return;
+    if (notification.id.startsWith('local-')) {
+      updateLocalNotificationRecord(notification.id, () => null);
+      return;
+    }
+
+    saveLocalNotificationRecord({ ...notification, isRead: true, metadata: { ...(notification.metadata || {}), dismissed: true } });
+  };
+
+  const downloadReceiptRecord = (receipt: ReceiptRecord) => {
+    const lines = [
+      'FASTKWACHA RECEIPT',
+      `Receipt ID: ${receipt.receiptId}`,
+      `Type: ${receipt.transactionType}`,
+      `Client: ${receipt.clientName}`,
+      `Amount: MWK ${receipt.amount.toLocaleString()}`,
+      `Date: ${new Date(receipt.date).toLocaleString()}`,
+      `Reference: ${receipt.transactionReference || 'N/A'}`,
+      `Authorized By: ${receipt.authorizedBy}`,
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${receipt.receiptId || receipt.id || 'receipt'}.txt`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  };
 
   const renderDashboard = () => (
     <div className="space-y-10">
@@ -12365,7 +12530,7 @@ function ClientDashboardView({
             <button onClick={() => onNavigate('notifications')} className="text-[10px] font-black text-slate-400 hover:text-brand-600 uppercase tracking-widest transition-colors">Inbox</button>
           </div>
           <Card className="rounded-[2.5rem] p-8 border border-slate-100 shadow-sm bg-slate-50 space-y-6">
-             {notifications.length === 0 ? (
+             {clientNotificationFeed.length === 0 ? (
                <div className="py-8 text-center space-y-3">
                   <div className="w-12 h-12 rounded-full border-2 border-slate-200 flex items-center justify-center mx-auto text-slate-300">
                     <BellRing size={20} />
@@ -12373,7 +12538,7 @@ function ClientDashboardView({
                   <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">No New Alerts</p>
                </div>
              ) : (
-                notifications.slice(0, 3).map(n => (
+                clientNotificationFeed.slice(0, 3).map(n => (
                   <div key={n.id} className="space-y-2 group cursor-pointer" onClick={() => onNavigate('notifications')}>
                     <div className="flex justify-between items-start">
                       <p className="text-xs font-black text-slate-900 group-hover:text-brand-600 transition-colors line-clamp-1">{n.title}</p>
@@ -12493,7 +12658,10 @@ function ClientDashboardView({
         {loanSubTab === 'schedule' && (
           <motion.div key="schedule" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-               {activeLoans.map(loan => (
+               {activeLoans.map(loan => {
+                 const scheduleItems = clientSchedules.filter((schedule: any) => schedule.loanId === loan.id);
+                 const nextInstallment = scheduleItems.find((schedule: any) => schedule.status !== 'PAID');
+                 return (
                  <Card key={loan.id} className="p-8 rounded-[2.5rem] border border-slate-100 bg-white">
                     <h4 className="font-black text-slate-900 uppercase tracking-widest text-[10px] mb-6 border-b border-slate-50 pb-4">Repayment Timeline: {loan.productName}</h4>
                     <div className="space-y-6">
@@ -12503,19 +12671,19 @@ function ClientDashboardView({
                        </div>
                        <div className="flex justify-between items-center">
                          <p className="text-xs font-bold text-slate-500">Term Duration</p>
-                         <p className="font-black text-slate-900 uppercase tracking-widest text-[10px]">{loan.tenureMonths} Months</p>
+                         <p className="font-black text-slate-900 uppercase tracking-widest text-[10px]">{loan.tenureMonths || loan.termMonths || 0} Months</p>
                        </div>
                        <div className="flex justify-between items-center">
                          <p className="text-xs font-bold text-slate-500">Frequency</p>
-                         <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest border-slate-200">{loan.repaymentFrequency}</Badge>
+                         <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest border-slate-200">{loan.repaymentFrequency || 'MONTHLY'}</Badge>
                        </div>
                        <div className="pt-4 border-t border-slate-50 flex justify-between items-center">
                          <p className="text-xs font-bold text-slate-900">Calculated Installment</p>
-                         <p className="text-lg font-black text-brand-600 tabular-nums">MWK {loan.repaymentAmount?.toLocaleString()}</p>
+                         <p className="text-lg font-black text-brand-600 tabular-nums">MWK {(loan.repaymentAmount || nextInstallment?.total || 0).toLocaleString()}</p>
                        </div>
                     </div>
                  </Card>
-               ))}
+               )})}
             </div>
           </motion.div>
         )}
@@ -12541,7 +12709,11 @@ function ClientDashboardView({
               <p className="text-slate-400 text-sm mt-1">Direct integration with Paychangu for automated verification.</p>
             </div>
             <div className="space-y-4">
-              {activeLoans.map(loan => (
+              {activeLoans.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/10 p-6 text-center text-sm text-slate-400">
+                  No active loans available for repayment right now.
+                </div>
+              ) : activeLoans.map(loan => (
                 <div key={loan.id} className="p-4 bg-white/5 rounded-2xl border border-white/5 flex items-center justify-between gap-4">
                   <div>
                     <p className="text-[10px] font-black uppercase tracking-widest text-brand-400">{loan.productName}</p>
@@ -12567,7 +12739,7 @@ function ClientDashboardView({
                <p className="font-black text-slate-900">Paid via Bank or Cash?</p>
                <p className="text-xs text-slate-500 font-medium">Upload your deposit slip or screenshots for manual reconciliation by our finance team.</p>
              </div>
-             <Button variant="outline" className="w-full h-14 border-2 border-slate-100 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-50">
+             <Button onClick={() => toast.info('Manual repayment proof capture is available through the receipts desk in the current build.')} variant="outline" className="w-full h-14 border-2 border-slate-100 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-50">
                SUBMIT PROOF OF PAYMENT
              </Button>
           </Card>
@@ -12586,19 +12758,19 @@ function ClientDashboardView({
         <div className="flex gap-2">
            <div className="relative h-12 w-64">
              <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-             <Input className="pl-10 h-full rounded-2xl border-2 border-slate-100 focus:border-brand-500 text-xs font-bold" placeholder="Search Receipt ID..." />
+             <Input value={receiptSearch} onChange={(e) => setReceiptSearch(e.target.value)} className="pl-10 h-full rounded-2xl border-2 border-slate-100 focus:border-brand-500 text-xs font-bold" placeholder="Search Receipt ID..." />
            </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        {receipts.length === 0 ? (
+        {searchableReceipts.length === 0 ? (
           <div className="py-32 text-center text-slate-300">
              <FileDown size={48} className="mx-auto mb-4 opacity-30" />
-             <p className="font-bold uppercase tracking-widest text-[10px]">Registry is empty</p>
+             <p className="font-bold uppercase tracking-widest text-[10px]">{receipts.length === 0 ? 'Registry is empty' : 'No receipts match your search'}</p>
           </div>
         ) : (
-          receipts.map(rcpt => (
+          searchableReceipts.map(rcpt => (
             <Card key={rcpt.id} className="p-6 rounded-[2.5rem] border border-slate-100 bg-white hover:shadow-xl transition-all group flex items-center justify-between gap-6">
               <div className="flex items-center gap-6">
                 <div className="w-14 h-14 rounded-2xl bg-slate-50 text-slate-400 group-hover:bg-brand-50 group-hover:text-brand-600 flex items-center justify-center font-black text-xs italic transition-all">
@@ -12621,7 +12793,7 @@ function ClientDashboardView({
                     <Button onClick={() => onViewReceipt(rcpt)} variant="outline" size="icon" className="w-12 h-12 rounded-xl border-slate-100 hover:bg-slate-900 hover:text-white transition-all">
                        <ArrowRight size={18} />
                     </Button>
-                    <Button variant="outline" size="icon" className="w-12 h-12 rounded-xl border-slate-100 hover:bg-slate-900 hover:text-white transition-all">
+                    <Button onClick={() => downloadReceiptRecord(rcpt)} variant="outline" size="icon" className="w-12 h-12 rounded-xl border-slate-100 hover:bg-slate-900 hover:text-white transition-all">
                        <Download size={18} />
                     </Button>
                  </div>
@@ -12641,15 +12813,15 @@ function ClientDashboardView({
       </div>
 
       <Card className="rounded-[3rem] border border-slate-100 bg-white overflow-hidden shadow-sm">
-        {notifications.length === 0 ? (
+        {clientNotificationFeed.length === 0 ? (
           <div className="py-32 text-center text-slate-300">
             <BellRing size={48} className="mx-auto mb-4 opacity-20" />
             <p className="font-bold uppercase tracking-widest text-[10px]">No notifications yet</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-50">
-            {notifications.map(n => (
-              <div key={n.id} className={`p-8 hover:bg-slate-50/50 transition-colors flex items-start gap-8 ${!n.isRead ? 'bg-brand-50/10 border-l-4 border-brand-500' : ''}`}>
+            {clientNotificationFeed.filter((notification) => !(notification.metadata as any)?.dismissed).map(n => (
+              <div data-testid={`client-notification-${n.id}`} key={n.id} className={`p-8 hover:bg-slate-50/50 transition-colors flex items-start gap-8 ${!n.isRead ? 'bg-brand-50/10 border-l-4 border-brand-500' : ''}`}>
                 <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${!n.isRead ? 'bg-brand-100 text-brand-600' : 'bg-slate-100 text-slate-400'}`}>
                   <Bell size={24} />
                 </div>
@@ -12660,8 +12832,8 @@ function ClientDashboardView({
                    </div>
                    <p className="text-slate-500 text-sm leading-relaxed max-w-3xl">{n.message}</p>
                    <div className="pt-2 flex gap-4">
-                      <button className="text-[9px] font-black text-brand-600 uppercase tracking-[0.2em] hover:underline">Mark as Read</button>
-                      <button className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] hover:underline">Delete</button>
+                      <button data-testid={`client-notification-read-${n.id}`} onClick={() => markClientNotificationAsRead(n)} className="text-[9px] font-black text-brand-600 uppercase tracking-[0.2em] hover:underline">Mark as Read</button>
+                      <button data-testid={`client-notification-delete-${n.id}`} onClick={() => deleteClientNotification(n)} className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em] hover:underline">Delete</button>
                    </div>
                 </div>
               </div>
