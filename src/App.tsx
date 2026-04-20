@@ -49,7 +49,12 @@ import {
   AlertTriangle,
   X,
   BellRing,
-  EyeOff
+  EyeOff,
+  Menu,
+  Activity,
+  Wallet,
+  Target,
+  Award
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -752,7 +757,7 @@ const runFinancialMaintenance = async (loans: any[], products: LoanProduct[], gr
         await createNotification(
           'LOAN_DEFAULTED',
           'Loan Marked as DEFAULTED',
-          `Loan for ${loan.clientName || loan.clientId} has been automatically flagged as DEFAULTED â€” all installments are overdue.`,
+          `Loan for ${loan.clientName || loan.clientId} has been automatically flagged as DEFAULTED ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â all installments are overdue.`,
           'OFFICER',
           loan.id
         );
@@ -1415,6 +1420,7 @@ export default function AppWrapper() {
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [role, setRole] = useState<UserRole>('CLIENT');
   const [authProfile, setAuthProfile] = useState<AuthProfile | null>(null);
@@ -2584,7 +2590,7 @@ function App() {
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Master Password</label>
                         <button type="button" className="text-[9px] font-black text-brand-600 uppercase tracking-widest hover:underline">Forgot?</button>
                       </div>
-                      <Input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                      <Input type="password" placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={password} onChange={(e) => setPassword(e.target.value)} required />
                     </div>
                     <Button type="submit" className="w-full h-14 bg-slate-900 hover:bg-brand-600 text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl shadow-slate-900/10 transition-all">
                       Authorize Access
@@ -2616,11 +2622,11 @@ function App() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-3">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Master Code</label>
-                        <Input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.password} onChange={(e) => setRegistrationData({ ...registrationData, password: e.target.value })} required />
+                        <Input type="password" placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.password} onChange={(e) => setRegistrationData({ ...registrationData, password: e.target.value })} required />
                       </div>
                       <div className="space-y-3">
                         <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Confirm</label>
-                        <Input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.confirmPassword} onChange={(e) => setRegistrationData({ ...registrationData, confirmPassword: e.target.value })} required />
+                        <Input type="password" placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢" className="h-14 rounded-2xl border-2 border-slate-100 focus:border-brand-500 focus:ring-0 font-bold" value={registrationData.confirmPassword} onChange={(e) => setRegistrationData({ ...registrationData, confirmPassword: e.target.value })} required />
                       </div>
                     </div>
                     <p className="text-[9px] text-slate-400 italic">Phase 1 of 2: Basic identity creation. Phone and National ID required after login.</p>
@@ -2657,19 +2663,34 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-background font-sans text-foreground">
-      
+    <div className="flex h-screen bg-background font-sans text-foreground overflow-hidden">
+      {/* Mobile Sidebar Overlay */}
+      {isMobileSidebarOpen && (
+        <div
+          className="sidebar-mobile-overlay lg:hidden"
+          onClick={() => setIsMobileSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className={`bg-sidebar border-r border-sidebar-border transition-all duration-300 flex flex-col ${isSidebarOpen ? 'w-[200px]' : 'w-20'}`}>
-        <div className="p-6 flex items-center gap-2">
-          <div className="w-8 h-8 bg-brand-500 rounded flex items-center justify-center text-white shrink-0">
-            <LayoutDashboard size={18} />
+      <aside className={`
+        bg-sidebar border-r border-sidebar-border flex flex-col shrink-0 z-50
+        transition-all duration-300 ease-in-out
+        fixed lg:relative inset-y-0 left-0
+        ${isMobileSidebarOpen ? 'translate-x-0 sidebar-mobile-enter' : '-translate-x-full lg:translate-x-0'}
+        ${isSidebarOpen ? 'w-[220px]' : 'lg:w-20 w-[220px]'}
+      `}>
+        <div className="p-5 flex items-center gap-3 border-b border-sidebar-border/40">
+          <div
+            className="w-9 h-9 bg-gradient-to-br from-brand-400 to-brand-700 rounded-xl flex items-center justify-center text-white shrink-0 shadow-lg cursor-pointer"
+            onClick={() => { setIsSidebarOpen(v => !v); setIsMobileSidebarOpen(false); }}
+          >
+            <LayoutDashboard size={16} />
           </div>
-          {isSidebarOpen && (
-            <div className="overflow-hidden whitespace-nowrap">
-              <h1 className="font-extrabold text-lg leading-tight text-white tracking-tighter">FASTKWACHA</h1>
-            </div>
-          )}
+          <div className={`overflow-hidden whitespace-nowrap transition-all duration-300 ${isSidebarOpen ? 'opacity-100 w-32' : 'opacity-0 w-0 lg:hidden'}`}>
+            <h1 className="font-black text-base leading-tight text-white tracking-widest">FASTKWACHA</h1>
+            <p className="text-[9px] text-sidebar-foreground/60 font-semibold tracking-widest uppercase">Loan Management</p>
+          </div>
         </div>
 
         <nav className="flex-1 space-y-0.5 mt-4">
@@ -2862,46 +2883,60 @@ function App() {
 
           {role === 'OFFICER' && (
             <>
-              <NavItem 
-                icon={<ShieldCheck size={16} />} 
-                label="Staff Terminal" 
-                active={currentView === 'dashboard'} 
-                onClick={() => setCurrentView('dashboard')}
+              <NavItem
+                icon={<LayoutDashboard size={16} />}
+                label="Command Center"
+                active={currentView === 'dashboard'}
+                onClick={() => { setCurrentView('dashboard'); setIsMobileSidebarOpen(false); }}
                 collapsed={!isSidebarOpen}
               />
-              <NavItem 
-                icon={<Users size={16} />} 
-                label="Clients" 
-                active={currentView === 'clients'} 
-                onClick={() => !isPendingStaff && setCurrentView('clients')}
+              <NavItem
+                icon={<Users size={16} />}
+                label="Clients"
+                active={currentView === 'clients'}
+                onClick={() => { if (!isPendingStaff) { setCurrentView('clients'); setIsMobileSidebarOpen(false); } }}
                 collapsed={!isSidebarOpen}
               />
-              <NavItem 
-                icon={<FileEdit size={16} />} 
-                label="Loan Application" 
-                active={currentView === 'applications'} 
-                onClick={() => !isPendingStaff && setCurrentView('applications')}
+              <NavItem
+                icon={<CheckCircle2 size={16} />}
+                label="Approvals"
+                active={currentView === 'approvals'}
+                onClick={() => { if (!isPendingStaff) { setCurrentView('approvals'); setIsMobileSidebarOpen(false); } }}
                 collapsed={!isSidebarOpen}
               />
-              <NavItem 
-                icon={<DollarSign size={16} />} 
-                label="Payments" 
-                active={currentView === 'payments'} 
-                onClick={() => !isPendingStaff && setCurrentView('payments')}
+              <NavItem
+                icon={<FileEdit size={16} />}
+                label="Applications"
+                active={currentView === 'applications'}
+                onClick={() => { if (!isPendingStaff) { setCurrentView('applications'); setIsMobileSidebarOpen(false); } }}
                 collapsed={!isSidebarOpen}
               />
-              <NavItem 
-                icon={<TrendingUp size={16} />} 
-                label="Ledger" 
-                active={currentView === 'transactions'} 
-                onClick={() => !isPendingStaff && setCurrentView('transactions')}
+              <NavItem
+                icon={<CreditCard size={16} />}
+                label="Repayments"
+                active={currentView === 'repayments'}
+                onClick={() => { if (!isPendingStaff) { setCurrentView('repayments'); setIsMobileSidebarOpen(false); } }}
                 collapsed={!isSidebarOpen}
               />
-              <NavItem 
-                icon={<Clock size={16} />} 
-                label="Due Loans" 
-                active={currentView === 'due-loans'} 
-                onClick={() => !isPendingAgent && setCurrentView('due-loans')}
+              <NavItem
+                icon={<TrendingUp size={16} />}
+                label="Ledger"
+                active={currentView === 'transactions'}
+                onClick={() => { if (!isPendingStaff) { setCurrentView('transactions'); setIsMobileSidebarOpen(false); } }}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem
+                icon={<Clock size={16} />}
+                label="Due Loans"
+                active={currentView === 'due-loans'}
+                onClick={() => { if (!isPendingStaff) { setCurrentView('due-loans'); setIsMobileSidebarOpen(false); } }}
+                collapsed={!isSidebarOpen}
+              />
+              <NavItem
+                icon={<BarChart3 size={16} />}
+                label="Reports"
+                active={currentView === 'reports'}
+                onClick={() => { if (!isPendingStaff) { setCurrentView('reports'); setIsMobileSidebarOpen(false); } }}
                 collapsed={!isSidebarOpen}
               />
             </>
@@ -2966,13 +3001,25 @@ function App() {
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      {/* Main Content — offset for fixed sidebar on desktop */}
+      <div className="hidden lg:block shrink-0 transition-all duration-300" style={{ width: isSidebarOpen ? '220px' : '80px' }} />
+      <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Header */}
-        <header className="h-16 bg-white border-b border-border flex items-center justify-between px-6 shrink-0">
-          <div className="flex flex-col">
-            <h1 className="text-xl font-bold tracking-tight">Institutional Dashboard</h1>
-            <p className="text-[12px] text-muted-foreground">Operational overview for Central Branch â€¢ Q3 FY24</p>
+        <header className="h-16 bg-white border-b border-border flex items-center justify-between px-4 md:px-6 shrink-0 gap-3">
+          <div className="flex items-center gap-3">
+            {/* Mobile hamburger */}
+            <button
+              onClick={() => setIsMobileSidebarOpen(v => !v)}
+              className="lg:hidden h-9 w-9 flex items-center justify-center rounded-lg border border-border bg-slate-50 hover:bg-slate-100 transition-colors shrink-0"
+            >
+              <Menu size={18} className="text-slate-600" />
+            </button>
+            <div className="flex flex-col min-w-0">
+              <h1 className="text-base md:text-lg font-bold tracking-tight truncate">
+                {role === 'OFFICER' ? 'Officer Terminal' : role === 'MANAGER' ? 'Manager Console' : role === 'CREDIT_ANALYST' ? 'Analyst Station' : 'FastKwacha LMS'}
+              </h1>
+              <p className="text-[11px] text-muted-foreground hidden sm:block">Operational overview &bull; {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</p>
+            </div>
           </div>
           
           <div className="flex items-center gap-4">
@@ -3034,7 +3081,7 @@ function App() {
                           Mark all read
                         </button>
                       )}
-                      <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white text-sm font-bold">âœ•</button>
+                      <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white text-sm font-bold">ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¢</button>
                     </div>
                   </div>
                   <div className="max-h-96 overflow-y-auto divide-y divide-border">
@@ -3045,9 +3092,9 @@ function App() {
                       </div>
                     ) : notifications.slice(0, 20).map(n => {
                       const icons: Record<string, string> = {
-                        LOAN_APPROVED: 'âœ…', LOAN_REJECTED: 'âŒ', PAYMENT_RECEIVED: 'ðŸ’°',
-                        PAYMENT_REMINDER: 'â°', LOAN_OVERDUE: 'âš ï¸', LOAN_DEFAULTED: 'ðŸ”´',
-                        STAGE_CHANGE: 'ðŸ”„', CRB_READY: 'ðŸ“‹', SYSTEM: 'âš™ï¸'
+                        LOAN_APPROVED: 'ÃƒÂ¢Ã…â€œÃ¢â‚¬Â¦', LOAN_REJECTED: 'ÃƒÂ¢Ã‚ÂÃ…â€™', PAYMENT_RECEIVED: 'ÃƒÂ°Ã…Â¸Ã¢â‚¬â„¢Ã‚Â°',
+                        PAYMENT_REMINDER: 'ÃƒÂ¢Ã‚ÂÃ‚Â°', LOAN_OVERDUE: 'ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â', LOAN_DEFAULTED: 'ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ‚Â´',
+                        STAGE_CHANGE: 'ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬Å¾', CRB_READY: 'ÃƒÂ°Ã…Â¸Ã¢â‚¬Å“Ã¢â‚¬Â¹', SYSTEM: 'ÃƒÂ¢Ã…Â¡Ã¢â€žÂ¢ÃƒÂ¯Ã‚Â¸Ã‚Â'
                       };
                       return (
                         <div
@@ -3060,7 +3107,7 @@ function App() {
                           }}
                         >
                           <div className="flex items-start gap-3">
-                            <span className="text-base mt-0.5">{icons[n.type] || 'ðŸ””'}</span>
+                            <span className="text-base mt-0.5">{icons[n.type] || 'ÃƒÂ°Ã…Â¸Ã¢â‚¬ÂÃ¢â‚¬Â'}</span>
                             <div className="flex-1 min-w-0">
                               <p className={`text-xs font-bold truncate ${!n.isRead ? 'text-slate-900' : 'text-slate-600'}`}>{n.title}</p>
                               <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{n.message}</p>
@@ -3093,18 +3140,7 @@ function App() {
           <AnimatePresence mode="wait">
             {currentView === 'dashboard' && (
               <motion.div key="dashboard">
-                {role === 'OFFICER' ? (
-                  <StaffDashboardView 
-                    clients={clients} 
-                    loans={loans} 
-                    applications={applications} 
-                    onNavigate={(v) => setCurrentView(v)} 
-                    transactions={transactions}
-                    profile={sessionProfile}
-                    showSuccessPanel={showRegistrationSuccessPanel}
-                    onDismissSuccessPanel={() => setShowRegistrationSuccessPanel(false)}
-                  />
-                ) : role === 'CLIENT' ? (
+                {role === 'CLIENT' ? (
                   <ClientDashboardView 
                     loans={loans.filter(l => l.clientSnapshot?.email === (sessionProfile?.email || user?.email) || l.clientId === sessionProfile?.id)}
                     receipts={receipts.filter(r => r.clientId === sessionProfile?.id || loans.some(l => l.id === r.loanId && (l.clientSnapshot?.email === (sessionProfile?.email || user?.email) || l.clientId === sessionProfile?.id)))}
@@ -3146,11 +3182,7 @@ function App() {
             )}
             {currentView === 'clients' && (
               <motion.div key="clients">
-                {role === 'AGENT' ? (
-                  isPendingAgent ? <PendingAgentWorkspace profile={sessionProfile!} /> : <AgentClientsView clients={clients} loans={loans} />
-                ) : (
-                  <ClientsView clients={clients} loans={loans} role={role} />
-                )}
+                <ClientsView clients={clients} loans={loans} role={role} />
               </motion.div>
             )}
             {currentView === 'applications' && (
@@ -3177,17 +3209,17 @@ function App() {
             )}
             {currentView === 'payments' && (
               <motion.div key="payments">
-                {isPendingAgent ? <PendingAgentWorkspace profile={sessionProfile!} /> : <PaymentModule clients={clients} loans={loans} />}
+                <RepaymentsView loans={loans} role={role} loanProducts={loanProducts} />
               </motion.div>
             )}
             {currentView === 'transactions' && (
               <motion.div key="transactions">
-                {isPendingAgent ? <PendingAgentWorkspace profile={sessionProfile!} /> : <AgentTransactionsView transactions={transactions} />}
+                <TransactionsAuditView transactions={transactions} loans={loans} />
               </motion.div>
             )}
             {currentView === 'due-loans' && (
               <motion.div key="due-loans">
-                {isPendingAgent ? <PendingAgentWorkspace profile={sessionProfile!} /> : <AgentDueLoansView loans={loans} clients={clients} onNavigate={setCurrentView} />}
+                <LoansView loans={loans.filter(l => l.status === 'ACTIVE' || l.status === 'OVERDUE' || l.status === 'DEFAULTED')} clients={clients} />
               </motion.div>
             )}
             {currentView === 'users' && (
@@ -3697,24 +3729,6 @@ function DashboardView({
         transactions={transactions} 
         onNavigate={onNavigate} 
         handleStageTransition={handleStageTransition}
-      />
-    );
-  }
-
-  if (role === 'CREDIT_ANALYST') {
-    return (
-      <CreditAnalystDashboardView
-        clients={clients}
-        loans={loans}
-        applications={applications}
-        users={users}
-        transactions={transactions}
-        workflowHistory={workflowHistory}
-        onNavigate={onNavigate}
-        handleStageTransition={handleStageTransition}
-        fetchCRBReport={fetchCRBReport}
-        user={users.find(u => u.role === 'CREDIT_ANALYST') || null}
-        recordWorkflowHistory={recordWorkflowHistory}
       />
     );
   }
@@ -4767,938 +4781,6 @@ function calculateAIConfidenceScore(app: any) {
   return Math.round(finalScore);
 }
 
-function CreditAnalystDashboardView({
-  clients,
-  loans,
-  applications,
-  users,
-  transactions,
-  workflowHistory,
-  onNavigate,
-  handleStageTransition,
-  fetchCRBReport,
-  user,
-  recordWorkflowHistory,
-}: {
-  clients: any[],
-  loans: any[],
-  applications: any[],
-  users: any[],
-  transactions: any[],
-  workflowHistory: any[],
-  onNavigate: (view: any) => void,
-  handleStageTransition: (app: any, stage: LoanStage, comment?: string) => Promise<boolean>,
-  fetchCRBReport: (app: any) => Promise<void>,
-  user: any,
-  recordWorkflowHistory: (loanId: string, fromStage: LoanStage | 'NONE', toStage: LoanStage, comment?: string) => Promise<void>,
-}) {
-  // No useAuth - using passed prop
-
-
-  const [activeTab, setActiveTab] = useState<'DASHBOARD' | 'QUEUE' | 'SMART_FIX' | 'INSIGHTS' | 'HISTORY'>('DASHBOARD');
-  const [selectedAppId, setSelectedAppId] = useState<string | null>(null);
-
-  console.log(`[DEBUG] AnalystDashboard Render | Tab: ${activeTab}`);
-  const [showManualCRB, setShowManualCRB] = useState(false);
-  const [showReferBack, setShowReferBack] = useState(false);
-  const [referralReason, setReferralReason] = useState("");
-  const [manualCRBFields, setManualCRBFields] = useState({
-    score: 0,
-    riskLevel: 'LOW',
-    existingDebt: 0,
-    paymentHistory: 'GOOD',
-    defaultHistory: 'NO',
-    defaultCount: 0,
-    notes: ''
-  });
-
-  
-  const analysisApps = applications.filter(a => a.current_stage === 'ANALYSIS');
-  const selectedApp = analysisApps.find(a => a.id === selectedAppId);
-  const selectedClient = selectedApp ? clients.find(c => c.id === selectedApp.clientId) : null;
-  
-  const handleSmartFixAdjust = async (app: any, newAmount: number) => {
-    try {
-      const updateData = {
-        amount: newAmount,
-        originalAmount: app.originalAmount || app.requestedAmount,
-        adjustedAmount: newAmount,
-        updatedAt: serverTimestamp(),
-        aiAdjustmentNote: "AI-adjusted loan amount based on risk scoring model"
-      };
-
-      await updateDoc(doc(db, 'applications', app.id), updateData);
-      
-      // record specifically for traceability
-      await recordWorkflowHistory(
-        app.id, 
-        app.current_stage, 
-        app.current_stage, 
-        `SMART_FIX: Amount adjusted from MWK ${(app.originalAmount || app.requestedAmount).toLocaleString()} to MWK ${newAmount.toLocaleString()}. Reason: AI risk optimization.`
-      );
-
-      toast.success("AI Adjustment applied successfully.");
-    } catch (error) {
-      console.warn("Smart Fix update blocked. Saving locally.", error);
-      const appToLocal = {
-        ...app,
-        amount: newAmount,
-        originalAmount: app.originalAmount || app.requestedAmount,
-        adjustedAmount: newAmount,
-        updatedAt: new Date().toISOString(),
-        aiAdjustmentNote: "AI-adjusted loan amount based on risk scoring model"
-      };
-      saveLocalApplication(appToLocal);
-      await recordWorkflowHistory(
-        app.id, 
-        app.current_stage, 
-        app.current_stage, 
-        `SMART_FIX: Amount adjusted from MWK ${(app.originalAmount || app.requestedAmount).toLocaleString()} to MWK ${newAmount.toLocaleString()}. Reason: AI risk optimization.`
-      );
-      toast.success("AI Adjustment applied locally.");
-    }
-  };
-
-  const handleManualCRBUpdate = async () => {
-    if (!selectedApp) return;
-    try {
-      const manualCRBRef = {
-        original_crb_snapshot: selectedApp.crb || null,
-        manual_crb_fields: manualCRBFields,
-        created_by: user?.email || 'system',
-        timestamp: new Date().toISOString(),
-        isManual: true
-      };
-
-      await updateDoc(doc(db, 'applications', selectedApp.id), {
-        manual_crb_ref: manualCRBRef,
-        crb: {
-          score: manualCRBFields.score,
-          riskLevel: manualCRBFields.riskLevel,
-          lastChecked: new Date().toISOString()
-        },
-        updatedAt: serverTimestamp()
-      });
-
-      await recordWorkflowHistory(
-        selectedApp.id,
-        selectedApp.current_stage,
-        selectedApp.current_stage,
-        `MANUAL_CRB_ENTRY: Credit data added manually by analyst. Score: ${manualCRBFields.score}`
-      );
-
-      setShowManualCRB(false);
-      toast.success("Manual CRB data recorded.");
-    } catch (error) {
-      console.warn("Manual CRB update blocked. Saving locally.", error);
-      const appToLocal = {
-        ...selectedApp,
-        manual_crb_ref: {
-          original_crb_snapshot: selectedApp.crb || null,
-          manual_crb_fields: manualCRBFields,
-          created_by: user?.email || 'system',
-          timestamp: new Date().toISOString(),
-          isManual: true
-        },
-        crb: {
-          score: manualCRBFields.score,
-          riskLevel: manualCRBFields.riskLevel,
-          lastChecked: new Date().toISOString()
-        },
-        updatedAt: new Date().toISOString()
-      };
-      saveLocalApplication(appToLocal);
-      await recordWorkflowHistory(
-        selectedApp.id,
-        selectedApp.current_stage,
-        selectedApp.current_stage,
-        `MANUAL_CRB_ENTRY: Credit data added manually by analyst. Score: ${manualCRBFields.score}`
-      );
-      setShowManualCRB(false);
-      toast.success("Manual CRB data recorded locally.");
-    }
-  };
-
-  const handleReferBackProc = async () => {
-    if (!selectedApp || !referralReason) {
-      toast.error("Referral reason is mandatory.");
-      return;
-    }
-    try {
-      const updateData = {
-        current_stage: 'UNDER_REVIEW',
-        updatedAt: serverTimestamp(),
-        referral_details: {
-          reason: referralReason,
-          timestamp: new Date().toISOString(),
-          managerId: user?.email || 'system', // Analyst acting as recommender
-          originalAnalystId: selectedApp.assignedAnalystId || user?.email
-        }
-      };
-
-      await updateDoc(doc(db, 'applications', selectedApp.id), updateData);
-      await recordWorkflowHistory(selectedApp.id, 'ANALYSIS', 'UNDER_REVIEW', `REFER_BACK: ${referralReason}`);
-      
-      setShowReferBack(false);
-      setReferralReason("");
-      setSelectedAppId(null);
-      toast.success("Application referred back to Under Review.");
-    } catch (error) {
-      console.warn("Referral blocked. Saving locally.", error);
-      const appToLocal = {
-        ...selectedApp,
-        current_stage: 'UNDER_REVIEW',
-        updatedAt: new Date().toISOString(),
-        referral_details: {
-          reason: referralReason,
-          timestamp: new Date().toISOString(),
-          managerId: user?.email || 'system',
-          originalAnalystId: selectedApp.assignedAnalystId || user?.email
-        }
-      };
-      saveLocalApplication(appToLocal);
-      await recordWorkflowHistory(selectedApp.id, 'ANALYSIS', 'UNDER_REVIEW', `REFER_BACK: ${referralReason}`);
-      
-      setShowReferBack(false);
-      setReferralReason("");
-      setSelectedAppId(null);
-      toast.success("Application referred back locally.");
-    }
-  };
-
-  const auditLogs = buildAuditLogs({ users, clients, applications, loans, transactions });
-  const anomalies = buildAnomalies({ users, applications, loans, transactions });
-  const kycCoverage = clients.length > 0 ? (clients.filter(client => getClientIdNumber(client)).length / clients.length) * 100 : 100;
-  const auditScore = Math.max(60, Math.round(100 - (anomalies.length * 4) - (100 - kycCoverage) * 0.2));
-
-  // ðŸ“Š Analytics Data Preparation
-  const accuracyData = users.filter(u => u.role === 'CREDIT_ANALYST').map(analyst => {
-     const analystLogs = workflowHistory.filter(h => h.managerId === analyst.email || h.comment.includes(analyst.email));
-     const approvalDecisions = analystLogs.filter(h => h.comment.includes('APPROVE'));
-     const successDecisions = approvalDecisions.filter(h => {
-        const correspondingLoan = loans.find(l => l.applicationId === h.loanId);
-        return correspondingLoan && correspondingLoan.status === 'REPAID';
-     });
-     return { 
-       name: analyst.name || analyst.email.split('@')[0], 
-       accuracy: approvalDecisions.length > 0 ? Math.round((successDecisions.length / approvalDecisions.length) * 100) : 75 
-     };
-  });
-
-  const fraudFlagData = [
-    { name: 'System Generated', count: anomalies.filter(a => a.severity === 'CRITICAL').length },
-    { name: 'Manual Flags', count: applications.filter(app => app.fraudFlags?.includes('MANUAL')).length + 1 }
-  ];
-
-  const loanSizeData = [
-    { range: '0-50k', count: loans.filter(l => l.amount <= 50000).length },
-    { range: '50-150k', count: loans.filter(l => l.amount > 50000 && l.amount <= 150000).length },
-    { range: '150-300k', count: loans.filter(l => l.amount > 150000 && l.amount <= 300000).length },
-    { range: '300k+', count: loans.filter(l => l.amount > 300000).length },
-  ];
-
-  const aiVsOutcome = [
-    { confidence: '80-100%', success: loans.filter(l => l.status === 'REPAID' && calculateAIConfidenceScore(applications.find(a => a.id === l.applicationId)) >= 80).length + 5 },
-    { confidence: '60-79%', success: loans.filter(l => l.status === 'REPAID' && calculateAIConfidenceScore(applications.find(a => a.id === l.applicationId)) >= 60).length + 3 },
-    { confidence: '40-59%', success: loans.filter(l => l.status === 'REPAID' && calculateAIConfidenceScore(applications.find(a => a.id === l.applicationId)) >= 40).length + 2 },
-    { confidence: '<40%', success: loans.filter(l => l.status === 'REPAID').length }
-  ];
-
-  const activeLoansList = loans.filter(l => l.status === 'ACTIVE');
-
-  const riskDistribution = [
-    { name: 'Low', value: activeLoansList.filter(l => l.crb?.riskLevel === 'LOW').length, color: '#10B981' },
-    { name: 'Medium', value: activeLoansList.filter(l => l.crb?.riskLevel === 'MEDIUM').length, color: '#F59E0B' },
-    { name: 'High', value: activeLoansList.filter(l => l.crb?.riskLevel === 'HIGH').length, color: '#EF4444' },
-  ].filter(d => d.value > 0);
-
-  const totalOutstanding = activeLoansList.reduce((sum, loan) => sum + (loan.outstandingBalance || 0), 0);
-
-  return (
-    <div
-      className="flex flex-col h-[calc(100vh-140px)] gap-6"
-    >
-      {/* ðŸ§­ TOP NAVIGATION TABS (Ribbon Style) */}
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between bg-white border border-border p-1 rounded-xl shadow-sm relative z-[100]">
-          <div className="flex gap-1">
-            {[
-              { id: 'DASHBOARD', label: 'Dashboard', icon: <LayoutDashboard size={14} /> },
-              { id: 'QUEUE', label: 'Analysis Queue', icon: <Briefcase size={14} /> },
-              { id: 'SMART_FIX', label: 'Smart Fix', icon: <Zap size={14} /> },
-              { id: 'INSIGHTS', label: 'Insights', icon: <TrendingUp size={14} /> },
-              { id: 'HISTORY', label: 'History', icon: <History size={14} /> },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                data-testid={`tab-${tab.id}`}
-                id={`tab-btn-${tab.id}`}
-                onClick={(e) => {
-                  console.log('CLICK_EVENT_TRIGGERED:', tab.id);
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setActiveTab(tab.id as any);
-                }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
-                  activeTab === tab.id 
-                    ? 'bg-slate-900 text-white shadow-md' 
-                    : 'text-slate-500 hover:bg-slate-50'
-                }`}
-              >
-                {tab.icon}
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-          
-          <div className="flex items-center gap-3 pr-4">
-            <span className="text-[10px] font-black text-slate-300 uppercase tracking-tighter">ANALYST_CONSOLE_v5</span>
-            <div className="h-4 w-[1px] bg-slate-100" />
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="h-8 text-[11px] font-bold border-brand-200 text-brand-700 bg-brand-50"
-              onClick={() => {
-                if (activeTab === 'QUEUE' && selectedApp) {
-                   setManualCRBFields({
-                     score: selectedApp.crb?.score || 0,
-                     riskLevel: selectedApp.crb?.riskLevel || 'LOW',
-                     existingDebt: 0,
-                     paymentHistory: 'GOOD',
-                     defaultHistory: 'NO',
-                     defaultCount: 0,
-                     notes: ''
-                   });
-                   setShowManualCRB(true);
-                }
-              }}
-              disabled={activeTab !== 'QUEUE' || !selectedApp}
-            >
-              <FileEdit size={14} className="mr-2" /> MANUAL CRB
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="h-8 text-[11px] font-bold border-brand-200 text-brand-700 bg-brand-50"
-              onClick={() => activeTab === 'QUEUE' && selectedApp && fetchCRBReport(selectedApp)}
-              disabled={activeTab !== 'QUEUE' || !selectedApp}
-            >
-              <ShieldCheck size={14} className="mr-2" /> FETCH CRB
-            </Button>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Workspace Area */}
-      <div className="flex-1 overflow-hidden relative z-10">
-          {activeTab === 'DASHBOARD' && (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4">
-
-              <StatCard title="Risk Pipeline" value={analysisApps.length.toString()} trend="Pending Analysis" highlight={analysisApps.length > 5} />
-              <StatCard title="Portfolio Risk" value={totalOutstanding > 0 ? `${((activeLoansList.filter(l => l.crb?.riskLevel === 'HIGH').reduce((s,l) => s + (l.outstandingBalance||0), 0) / totalOutstanding) * 100).toFixed(1)}%` : '0%'} trend="High-risk concentration" />
-              <StatCard title="KYC Compliance" value={`${kycCoverage.toFixed(1)}%`} trend="Data integrity" />
-              <StatCard title="Audit Health" value={`${auditScore}/100`} trend="Control effectiveness" />
-              
-              <div className="md:col-span-3 grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <Card className="border border-border shadow-none rounded-xl bg-white p-6">
-                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6">Risk Composition</h3>
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie data={riskDistribution} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
-                          {riskDistribution.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                        </Pie>
-                        <Tooltip />
-                        <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </Card>
-                <div className="space-y-4">
-                  <div className="bg-slate-900 rounded-xl p-5 text-white flex items-center justify-between">
-                    <div>
-                      <p className="text-[10px] font-bold text-brand-400 uppercase">System Integrity</p>
-                      <p className="text-xl font-black">Stable</p>
-                    </div>
-                    <AlertTriangle size={36} className="text-brand-500 opacity-50" />
-                  </div>
-                  <Card className="p-4 border border-border shadow-none">
-                     <p className="text-xs font-bold mb-2 uppercase text-slate-400">Recent Alerts</p>
-                     {anomalies.slice(0, 3).map(a => (
-                        <div key={a.id} className="text-[11px] py-1 border-b border-slate-50 last:border-0 truncate">
-                          <span className={a.severity === 'CRITICAL' ? 'text-red-500' : 'text-amber-500'}>â—</span> {a.description}
-                        </div>
-                     ))}
-                  </Card>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'QUEUE' && (
-             <div className="flex h-full gap-5 overflow-hidden p-4">
-
-                {/* ðŸ“‹ LEFT PANEL: Loan Queue */}
-                <Card className="w-80 flex flex-col border border-border bg-white shadow-none overflow-hidden shrink-0">
-                  <div className="p-4 border-b border-border bg-slate-50 flex items-center justify-between">
-                    <h3 className="text-[11px] font-black uppercase tracking-tighter text-slate-700">Analyst Queue ({analysisApps.length})</h3>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-6 w-6"><Filter size={10} /></Button>
-                    </div>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                    {analysisApps.length === 0 ? (
-                      <p className="text-[11px] text-center py-10 text-muted-foreground italic">No applications in analysis.</p>
-                    ) : (
-                      analysisApps.map(app => (
-                        <div 
-                          key={app.id} 
-                          data-testid="queue-item"
-                          onClick={() => setSelectedAppId(app.id)}
-                          className={`p-3 rounded-lg border transition-all cursor-pointer ${
-                            selectedAppId === app.id 
-                              ? 'bg-slate-900 border-slate-900 text-white shadow-md' 
-                              : 'bg-white border-slate-100 hover:border-brand-300'
-                          }`}
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-black uppercase ${
-                              app.crb?.riskLevel === 'HIGH' ? 'bg-red-500 text-white' :
-                              app.crb?.riskLevel === 'MEDIUM' ? 'bg-amber-500 text-white' :
-                              'bg-green-500 text-white'
-                            }`}>
-                              {app.crb?.riskLevel || 'NEW'}
-                            </span>
-                            <span className="text-[9px] font-mono opacity-50">{app.id.slice(0, 8).toUpperCase()}</span>
-                          </div>
-                          <p className="text-xs font-bold truncate">{app.clientSnapshot?.name || app.clientName || 'Unknown Applicant'}</p>
-                          <div className="flex justify-between items-center mt-2 opacity-80">
-                            <span className="text-[10px] font-bold">MWK {(app.requestedAmount || 0).toLocaleString()}</span>
-                            <SLAStatusIndicator submittedAt={app.submittedAt || app.createdAt} />
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </Card>
-
-                {/* ðŸ“„ CENTER PANEL: Loan Detail View */}
-                <div className="flex-1 flex flex-col gap-5 overflow-hidden">
-                  {selectedApp ? (
-                    <>
-                      <Card className="flex-1 border border-border shadow-none rounded-xl bg-white overflow-y-auto p-6 space-y-8">
-                        {/* SECTION 1: Applicant Profile */}
-                        <section>
-                          <div className="flex items-center gap-2 mb-4">
-                            <UserIcon size={16} className="text-brand-600" />
-                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Applicant Profile</h4>
-                          </div>
-                          <div className="grid grid-cols-2 gap-6">
-                            {[
-                              { label: 'Full Name', value: selectedApp.clientSnapshot?.name || selectedApp.clientName || 'N/A' },
-                              { label: 'ID Number', value: selectedApp.clientSnapshot?.nationalId || 'N/A' },
-                              { label: 'Phone', value: selectedApp.clientSnapshot?.phone || 'N/A' },
-                              { label: 'Employment', value: selectedApp.employmentStatus || 'SALARIED' },
-                              { label: 'Monthly Income', value: `MWK ${(selectedApp.monthlyIncome || 0).toLocaleString()}` },
-                              { label: 'Residence', value: selectedApp.clientSnapshot?.residence || 'N/A' },
-                            ].map(item => (
-                              <div key={item.label}>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">{item.label}</p>
-                                <p className="text-sm font-semibold text-slate-900">{item.value}</p>
-                              </div>
-                            ))}
-                          </div>
-                        </section>
-
-                        <Separator className="bg-slate-50" />
-
-                        {/* SECTION 2: Loan Details */}
-                        <section>
-                          <div className="flex items-center gap-2 mb-4">
-                            <DollarSign size={16} className="text-brand-600" />
-                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-400">Loan Request Details</h4>
-                          </div>
-                          <div className="grid grid-cols-2 gap-6">
-                            <div>
-                              <p className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Requested Amount</p>
-                              <p className="text-xl font-black text-slate-900">MWK {(selectedApp.requestedAmount || 0).toLocaleString()}</p>
-                              {selectedApp.adjustedAmount && (
-                                <p className="text-[10px] font-bold text-brand-600 mt-1 uppercase">
-                                  AI Adjusted from MWK {selectedApp.originalAmount?.toLocaleString()}
-                                </p>
-                              )}
-                            </div>
-                            <div>
-                               <p className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Loan Term</p>
-                               <p className="text-sm font-bold text-slate-900">{selectedApp.termMonths || 12} Months</p>
-                            </div>
-                            <div>
-                               <p className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Product Type</p>
-                               <p className="text-sm font-bold text-slate-900">{selectedApp.productName || 'Standard Loan'}</p>
-                            </div>
-                            <div>
-                               <p className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Submission Date</p>
-                               <p className="text-sm font-bold text-slate-900">{new Date(selectedApp.createdAt).toLocaleDateString()}</p>
-                            </div>
-                          </div>
-                        </section>
-
-                        <Separator className="bg-slate-50" />
-
-                        {/* SECTION 3: Financial Snapshot */}
-                        <section className="bg-slate-50 p-5 rounded-xl border border-slate-100">
-                          <div className="flex items-center gap-2 mb-4">
-                            <PieChartIcon size={16} className="text-brand-600" />
-                            <h4 className="text-xs font-black uppercase tracking-widest text-slate-500">Financial Projection</h4>
-                          </div>
-                          <div className="grid grid-cols-3 gap-4">
-                             <div className="bg-white p-3 rounded-lg border border-slate-200">
-                                <p className="text-[9px] font-bold text-slate-400 uppercase">Monthly DTI</p>
-                                <p className="text-lg font-black">{Math.round((selectedApp.expected_installment / selectedApp.monthlyIncome) * 100) || '0'}%</p>
-                             </div>
-                             <div className="bg-white p-3 rounded-lg border border-slate-200">
-                                <p className="text-[9px] font-bold text-slate-400 uppercase">Monthly Installment</p>
-                                <p className="text-lg font-black text-brand-600">MWK {(selectedApp.expected_installment || 0).toLocaleString()}</p>
-                             </div>
-                             <div className="bg-white p-3 rounded-lg border border-slate-200">
-                                <p className="text-[9px] font-bold text-slate-400 uppercase">Total Payable</p>
-                                <p className="text-lg font-bold">MWK {((selectedApp.requestedAmount || 0) * 1.1).toLocaleString()}</p>
-                             </div>
-                          </div>
-                        </section>
-                      </Card>
-
-                      {/* ðŸŽ¬ ACTION PANEL */}
-                      <div className="flex gap-3 h-14 shrink-0">
-                        <Button 
-                          className="flex-1 h-full bg-green-600 hover:bg-green-700 font-bold uppercase tracking-widest"
-                          onClick={() => handleStageTransition(selectedApp, 'FINAL_DECISION', 'Credit Analyst verification complete. RECOMMEND APPROVAL.')}
-                        >
-                          Recommend Approval
-                        </Button>
-                        <Button 
-                          variant="outline"
-                          className="flex-1 h-full border-red-200 text-red-700 hover:bg-red-50 font-bold uppercase tracking-widest"
-                          onClick={() => handleStageTransition(selectedApp, 'FINAL_DECISION', 'High risk Profile detected. RECOMMEND REJECTION.')}
-                        >
-                          Recommend Rejection
-                        </Button>
-                        <Button 
-                          variant="secondary"
-                          className="w-40 h-full font-bold uppercase tracking-widest"
-                          onClick={() => setShowReferBack(true)}
-                        >
-                          Refer Back
-                        </Button>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center bg-white border border-border border-dashed rounded-xl text-muted-foreground">
-                      <FileText size={48} className="mb-4 opacity-20" />
-                      <p className="text-sm font-bold uppercase tracking-widest">Select an application from the queue</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* ðŸ§  RIGHT PANEL: Risk & AI Insights */}
-                <div className="w-80 flex flex-col gap-5 shrink-0 overflow-y-auto pr-1">
-                  {selectedApp ? (
-                    <>
-                      {/* CRB Summary */}
-                      <Card className="p-5 border border-border shadow-none rounded-xl bg-white">
-                        <div className="flex justify-between items-center mb-4">
-                          <h4 className="text-[10px] font-black uppercase text-slate-400">CRB Summary</h4>
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-black ${
-                            selectedApp.crb?.riskLevel === 'HIGH' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                          }`}>
-                            {selectedApp.crb?.riskLevel || 'NO DATA'}
-                          </span>
-                        </div>
-                        <div className="flex items-end gap-2 mb-2">
-                          <span className="text-3xl font-black text-slate-900">{selectedApp.crb?.score || '---'}</span>
-                          <span className="text-xs font-bold text-slate-400 mb-1">SCORE</span>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground">Source: {selectedApp.crb ? 'Bureau API' : 'Direct Inquiry Required'}</p>
-                      </Card>
-
-                      {/* AI Confidence Indicator */}
-                      <Card className="p-5 border border-border shadow-none rounded-xl bg-slate-900 text-white overflow-hidden relative">
-                         <div className="absolute top-0 right-0 p-2 opacity-10">
-                           <Zap size={60} />
-                         </div>
-                         <h4 className="text-[10px] font-black uppercase text-slate-400 mb-4 relative z-10">AI Confidence Indicator</h4>
-                         <div className="flex items-center gap-4 relative z-10">
-                            <div className="relative w-16 h-16 flex items-center justify-center">
-                               <svg className="w-full h-full transform -rotate-90">
-                                 <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-800" />
-                                 <circle 
-                                   cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="transparent" 
-                                   strokeDasharray={175} 
-                                   strokeDashoffset={175 - (175 * calculateAIConfidenceScore(selectedApp)) / 100}
-                                   className="text-brand-500" 
-                                 />
-                               </svg>
-                               <span className="absolute text-sm font-black">{calculateAIConfidenceScore(selectedApp)}%</span>
-                            </div>
-                            <div>
-                               <p className="text-xs font-bold">
-                                 {calculateAIConfidenceScore(selectedApp) >= 80 ? 'Strong Approval Signal' :
-                                  calculateAIConfidenceScore(selectedApp) >= 60 ? 'Conditional Approval' :
-                                  calculateAIConfidenceScore(selectedApp) >= 40 ? 'Review Required' : 'High Risk'}
-                               </p>
-                               <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-tighter">Weighted risk model v5</p>
-                            </div>
-                         </div>
-                      </Card>
-
-                      {/* Detected Anomalies */}
-                      <Card className="flex-1 p-5 border border-border shadow-none rounded-xl bg-white space-y-4">
-                        <h4 className="text-[10px] font-black uppercase text-slate-400">Detected Anomalies</h4>
-                        <div className="space-y-3">
-                           {anomalies.filter(a => a.sourceId === selectedAppId).length === 0 ? (
-                             <p className="text-xs text-green-600 font-bold italic">No logical anomalies detected.</p>
-                           ) : (
-                             anomalies.filter(a => a.sourceId === selectedAppId).map(a => (
-                               <div key={a.id} className="p-2 bg-red-50 border border-red-100 rounded text-[11px] text-red-700">
-                                 <p className="font-bold flex items-center gap-1"><AlertCircle size={12} /> {a.type.replace(/_/g, ' ')}</p>
-                                 <p className="opacity-80 mt-1">{a.description}</p>
-                               </div>
-                             ))
-                           )}
-                        </div>
-                      </Card>
-                    </>
-                  ) : (
-                    <div className="flex-1 border border-border border-dashed rounded-xl bg-slate-50" />
-                  )}
-                </div>
-             </div>
-          )}
-
-          {activeTab === 'SMART_FIX' && (
-             <motion.div 
-               key="smart_fix" 
-               initial={{ opacity: 0, scale: 0.95 }}
-               animate={{ opacity: 1, scale: 1 }}
-               className="h-full space-y-6 overflow-y-auto pr-2"
-             >
-                <div className="bg-brand-50 border border-brand-100 p-6 rounded-2xl flex items-center justify-between">
-                  <div>
-                    <h2 className="text-xl font-black text-brand-900">Smart Fix Console</h2>
-                    <p className="text-xs font-medium text-brand-700 mt-1">AI-detected inconsistencies requiring resolution.</p>
-                  </div>
-                  <Zap size={32} className="text-brand-500 animate-pulse" />
-                </div>
-
-                <div className="grid grid-cols-1 gap-4">
-                  {analysisApps.filter(app => {
-                    const appAnoms = anomalies.filter(anom => anom.sourceId === app.id);
-                    return appAnoms.some(anom => anom.type === 'EXPOSURE_RISK' || anom.severity === 'CRITICAL');
-                  }).length === 0 ? (
-                    <Card className="p-12 text-center border-dashed">
-                      <CheckCircle2 size={48} className="mx-auto mb-4 text-green-500 opacity-20" />
-                      <p className="text-sm font-bold text-slate-400 uppercase tracking-widest">No critical inconsistencies detected.</p>
-                    </Card>
-                  ) : (
-                    analysisApps.filter(app => {
-                      const appAnoms = anomalies.filter(anom => anom.sourceId === app.id);
-                      return appAnoms.some(anom => anom.type === 'EXPOSURE_RISK' || anom.severity === 'CRITICAL');
-                    }).map(app => (
-                      <Card key={app.id} className="p-6 border border-border bg-white shadow-none transition-all hover:shadow-md">
-                        <div className="flex justify-between items-start mb-6">
-                           <div className="flex gap-3 items-center">
-                              <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-500">
-                                {app.clientSnapshot?.name?.charAt(0)}
-                              </div>
-                              <div>
-                                <p className="text-sm font-black">{app.clientSnapshot?.name}</p>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">ID: {app.id.slice(0, 8)}</p>
-                              </div>
-                           </div>
-                           <Badge className="bg-red-100 text-red-700 border-none px-3 py-1 font-black text-[10px]">CRITICAL ISSUE</Badge>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                           <div className="space-y-4">
-                              <div className="p-4 bg-red-50 border border-red-100 rounded-xl">
-                                 <p className="text-[10px] font-black uppercase text-red-600 mb-2">Issue Detected</p>
-                                 <p className="text-xs font-bold text-red-900">
-                                   Exposure Risk: Requested amount of MWK {(app.requestedAmount || 0).toLocaleString()} exceeds safe threshold for MWK {(app.monthlyIncome || 0).toLocaleString()} income.
-                                 </p>
-                              </div>
-                              <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400">
-                                <Info size={14} /> Recommended Action: Auto-adjust to 40% income ceiling.
-                              </div>
-                           </div>
-
-                           <div className="bg-slate-50 p-5 rounded-xl border border-slate-100 flex flex-col justify-between">
-                              <div className="flex justify-between items-center mb-4">
-                                 <p className="text-[10px] font-black uppercase text-slate-400">Smart Resolution</p>
-                                 <p className="text-xs font-black text-brand-600">SAFE LIMIT: MWK {(app.monthlyIncome * 3).toLocaleString()}</p>
-                              </div>
-                              <div className="flex gap-2">
-                                 <Button 
-                                   className="flex-1 bg-brand-600 font-bold text-[11px] h-10"
-                                   onClick={() => handleSmartFixAdjust(app, app.monthlyIncome * 3)}
-                                 >
-                                   Auto Adjust Loan Amount
-                                 </Button>
-                                 <Button variant="outline" className="flex-1 font-bold text-[11px] h-10" onClick={() => handleStageTransition(app, 'FINAL_DECISION', 'Risk manually flagged. Analyst review required.')}>
-                                   Flag for Manager
-                                 </Button>
-                                 <Button variant="ghost" className="font-bold text-[11px] h-10 px-3">Ignore</Button>
-                              </div>
-                           </div>
-                        </div>
-                      </Card>
-                    ))
-                  )}
-                </div>
-             </motion.div>
-          )}
-          
-          {activeTab === 'INSIGHTS' && (
-             <motion.div 
-               key="insights" 
-               initial={{ opacity: 0, y: 10 }}
-               animate={{ opacity: 1, y: 0 }}
-               className="h-full space-y-6 overflow-y-auto pr-2"
-             >
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                   {/* 1. Outcome-Based Accuracy */}
-                   <Card className="p-6 border border-border bg-white shadow-none">
-                      <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6">Analyst Performance (Outcome Accuracy)</h4>
-                      <div className="h-64">
-                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={accuracyData}>
-                               <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
-                               <YAxis fontSize={10} axisLine={false} tickLine={false} unit="%" />
-                               <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '8px' }} />
-                               <Bar dataKey="accuracy" fill="#4F46E5" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                         </ResponsiveContainer>
-                      </div>
-                   </Card>
-
-                   {/* 2. Fraud Flag Frequency */}
-                   <Card className="p-6 border border-border bg-white shadow-none">
-                      <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6">Fraud Flag Frequency (Hybrid)</h4>
-                      <div className="h-64">
-                         <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                               <Pie data={fraudFlagData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="count">
-                                  <Cell fill="#EF4444" />
-                                  <Cell fill="#F59E0B" />
-                               </Pie>
-                               <Tooltip />
-                               <Legend verticalAlign="bottom" height={36} />
-                            </PieChart>
-                         </ResponsiveContainer>
-                      </div>
-                   </Card>
-
-                   {/* 3. AI Confidence vs Success Rate */}
-                   <Card className="p-6 border border-border bg-white shadow-none">
-                      <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6">AI Confidence vs Actual Repayment</h4>
-                      <div className="h-64">
-                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={aiVsOutcome}>
-                               <XAxis dataKey="confidence" fontSize={10} />
-                               <YAxis fontSize={10} />
-                               <Tooltip />
-                               <Area type="monotone" dataKey="success" stroke="#10B981" fill="#D1FAE5" />
-                            </AreaChart>
-                         </ResponsiveContainer>
-                      </div>
-                   </Card>
-
-                   {/* 4. Loan Size Distribution */}
-                   <Card className="p-6 border border-border bg-white shadow-none">
-                      <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6">Loan Size Clustering (Portfolio Risk)</h4>
-                      <div className="h-64">
-                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={loanSizeData} layout="vertical">
-                               <XAxis type="number" fontSize={10} hide />
-                               <YAxis dataKey="range" type="category" fontSize={10} axisLine={false} tickLine={false} width={80} />
-                               <Tooltip />
-                               <Bar dataKey="count" fill="#6366F1" radius={[0, 4, 4, 0]} />
-                            </BarChart>
-                         </ResponsiveContainer>
-                      </div>
-                   </Card>
-                </div>
-
-                {/* 5. Default Rate Over Time */}
-                <Card className="p-6 border border-border bg-white shadow-none">
-                    <h4 className="text-[10px] font-black uppercase text-slate-400 mb-6">Portfolio Default Rate Trends</h4>
-                    <div className="h-64">
-                       <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={loans.slice(-12).map((l, i) => ({ month: `M-${11-i}`, rate: Math.random() * 5 }))}>
-                             <XAxis dataKey="month" fontSize={10} />
-                             <YAxis fontSize={10} unit="%" />
-                             <Tooltip />
-                             <Line type="monotone" dataKey="rate" stroke="#EF4444" strokeWidth={3} dot={{ fill: '#EF4444' }} />
-                          </LineChart>
-                       </ResponsiveContainer>
-                    </div>
-                </Card>
-             </motion.div>
-          )}
-
-          {activeTab === 'HISTORY' && (
-             <motion.div 
-               key="history" 
-               initial={{ opacity: 0 }}
-               animate={{ opacity: 1 }}
-               className="h-full space-y-5"
-             >
-                <Card className="border border-border shadow-none rounded-xl bg-white overflow-hidden flex flex-col h-full">
-                  <div className="px-6 py-4 border-b border-border bg-slate-50">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-700">Decision Audit History</h3>
-                  </div>
-                  <div className="flex-1 overflow-y-auto">
-                    <Table className="text-[12px]">
-                       <TableHeader className="bg-slate-50 sticky top-0 z-10">
-                          <TableRow className="border-border">
-                             <TableHead className="font-bold h-10 px-6">Timestamp</TableHead>
-                             <TableHead className="font-bold h-10 px-6">Trace ID</TableHead>
-                             <TableHead className="font-bold h-10 px-6">Client</TableHead>
-                             <TableHead className="font-bold h-10 px-6">Action</TableHead>
-                             <TableHead className="font-bold h-10 px-6">Metadata</TableHead>
-                          </TableRow>
-                       </TableHeader>
-                       <TableBody>
-                          {workflowHistory.filter(h => h.fromStage === 'ANALYSIS' || h.toStage === 'ANALYSIS' || h.comment.includes('SMART_FIX')).length === 0 ? (
-                             <TableRow><TableCell colSpan={5} className="text-center py-20 text-slate-400 italic">No history records found.</TableCell></TableRow>
-                          ) : (
-                             workflowHistory.filter(h => h.fromStage === 'ANALYSIS' || h.toStage === 'ANALYSIS' || h.comment.includes('SMART_FIX')).map((h, i) => {
-                                const app = applications.find(a => a.id === h.loanId);
-                                return (
-                                  <TableRow key={i} className="border-border">
-                                     <TableCell className="px-6 py-4 opacity-70">{new Date(h.timestamp).toLocaleString()}</TableCell>
-                                     <TableCell className="px-6 py-4 font-mono text-[9px] uppercase tracking-tighter">TRC-{h.loanId.slice(0, 8)}</TableCell>
-                                     <TableCell className="px-6 py-4 font-bold">{app?.clientSnapshot?.name || 'Unknown'}</TableCell>
-                                     <TableCell className="px-6 py-4">
-                                        <Badge className={`px-2 py-0.5 rounded text-[9px] font-black ${
-                                           h.comment.includes('APPROVE') ? 'bg-green-100 text-green-700' :
-                                           h.comment.includes('REJECT') ? 'bg-red-100 text-red-700' :
-                                           h.comment.includes('REFER') ? 'bg-amber-100 text-amber-700' :
-                                           'bg-slate-100 text-slate-700'
-                                        }`}>
-                                           {h.comment.split(':')[0]}
-                                        </Badge>
-                                     </TableCell>
-                                     <TableCell className="px-6 py-4 max-w-[200px] truncate opacity-70 italic">{h.comment}</TableCell>
-                                  </TableRow>
-                               );
-                             })
-                          )}
-                       </TableBody>
-                    </Table>
-                  </div>
-                </Card>
-             </motion.div>
-          )}
-
-          {/* ðŸ§¾ MODAL: Manual CRB Entry */}
-          {showManualCRB && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden">
-                  <div className="p-6 border-b border-border bg-slate-900 text-white flex justify-between items-center">
-                     <div>
-                        <h3 className="text-lg font-black">Structured Manual CRB Entry</h3>
-                        <p className="text-[10px] text-slate-400 uppercase font-bold">Traceability Layer Active</p>
-                     </div>
-                     <ShieldAlert size={24} className="text-brand-500" />
-                  </div>
-                  <div className="p-6 grid grid-cols-2 gap-4">
-                     <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-500 uppercase">CRB Score (0-999)</label>
-                        <Input type="number" min="0" max="999" value={manualCRBFields.score} onChange={e => setManualCRBFields({...manualCRBFields, score: parseInt(e.target.value)})} />
-                     </div>
-                     <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-500 uppercase">Risk Level</label>
-                        <select className="w-full h-10 rounded-md border border-input bg-background px-3" value={manualCRBFields.riskLevel} onChange={e => setManualCRBFields({...manualCRBFields, riskLevel: e.target.value})}>
-                           <option value="LOW">LOW</option>
-                           <option value="MEDIUM">MEDIUM</option>
-                           <option value="HIGH">HIGH</option>
-                           <option value="CRITICAL">CRITICAL</option>
-                        </select>
-                     </div>
-                     <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-500 uppercase">Existing Debt Load (MWK)</label>
-                        <Input type="number" value={manualCRBFields.existingDebt} onChange={e => setManualCRBFields({...manualCRBFields, existingDebt: parseInt(e.target.value)})} />
-                     </div>
-                     <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-500 uppercase">Payment History</label>
-                        <select className="w-full h-10 rounded-md border border-input bg-background px-3" value={manualCRBFields.paymentHistory} onChange={e => setManualCRBFields({...manualCRBFields, paymentHistory: e.target.value})}>
-                           <option value="GOOD">Excellent/Good</option>
-                           <option value="FAIR">Fair/Inconsistent</option>
-                           <option value="POOR">Poor/Negative</option>
-                        </select>
-                     </div>
-                     <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-500 uppercase">Default History</label>
-                        <div className="flex gap-4 p-2 bg-slate-50 rounded">
-                           <label className="flex items-center gap-1 text-xs"><input type="radio" checked={manualCRBFields.defaultHistory === 'YES'} onChange={() => setManualCRBFields({...manualCRBFields, defaultHistory: 'YES'})} /> Yes</label>
-                           <label className="flex items-center gap-1 text-xs"><input type="radio" checked={manualCRBFields.defaultHistory === 'NO'} onChange={() => setManualCRBFields({...manualCRBFields, defaultHistory: 'NO'})} /> No</label>
-                        </div>
-                     </div>
-                     <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-500 uppercase">Default Count</label>
-                        <Input type="number" value={manualCRBFields.defaultCount} onChange={e => setManualCRBFields({...manualCRBFields, defaultCount: parseInt(e.target.value)})} />
-                     </div>
-                     <div className="col-span-2 space-y-1">
-                        <label className="text-[10px] font-black text-slate-500 uppercase">Analytical Notes (Optional)</label>
-                        <Input placeholder="Rationale for manual entry..." value={manualCRBFields.notes} onChange={e => setManualCRBFields({...manualCRBFields, notes: e.target.value})} />
-                     </div>
-                  </div>
-                  <div className="p-4 bg-slate-50 border-t border-border flex gap-2">
-                     <Button className="flex-1 bg-slate-900 font-bold" onClick={handleManualCRBUpdate}>Commit to Immutable Audit</Button>
-                     <Button variant="ghost" className="flex-1 font-bold" onClick={() => setShowManualCRB(false)}>Cancel</Button>
-                  </div>
-               </motion.div>
-            </div>
-          )}
-
-          {/* ðŸ”„ MODAL: Refer Back */}
-          {showReferBack && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-               <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-                  <div className="p-6 border-b border-border bg-amber-600 text-white flex justify-between items-center">
-                     <div>
-                        <h3 className="text-lg font-black italic">Refer Back Application</h3>
-                        <p className="text-[10px] text-amber-100 uppercase font-black">Destination: UNDER_REVIEW</p>
-                     </div>
-                     <History size={24} className="opacity-50" />
-                  </div>
-                  <div className="p-6 space-y-4">
-                     <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Reason for Referral (Mandatory)</label>
-                        <textarea 
-                          rows={4}
-                          value={referralReason}
-                          onChange={e => setReferralReason(e.target.value)}
-                          placeholder="Explain what needs verification or fixing..."
-                          className="w-full rounded-md border border-input bg-background p-3 text-sm"
-                        />
-                     </div>
-                     <div className="p-3 bg-amber-50 rounded-lg border border-amber-100 text-[10px] text-amber-700 font-medium">
-                        Return Route Lock: Original Analyst Memory Continuity Active.
-                     </div>
-                  </div>
-                  <div className="p-4 bg-slate-50 border-t border-border flex gap-2">
-                     <Button className="flex-1 bg-amber-600 hover:bg-amber-700 font-black" onClick={handleReferBackProc}>REFER BACK NOW</Button>
-                     <Button variant="ghost" className="flex-1 font-bold" onClick={() => setShowReferBack(false)}>Cancel Action</Button>
-                  </div>
-               </motion.div>
-            </div>
-          )}
-
-       </div>
-      </div>
-   );
-}
 
 
 function AdminDashboardView({
@@ -7310,7 +6392,7 @@ function ApplicationsView({ clients, applications, role, sessionProfile, uploadD
                       </Avatar>
                       <div>
                         <p className="font-bold text-sm">{getClientName(client)}</p>
-                        <p className="text-xs text-slate-500">Phone: {getClientPrimaryPhone(client) || 'N/A'} â€¢ ID: {getClientIdNumber(client) || 'N/A'}</p>
+                        <p className="text-xs text-slate-500">Phone: {getClientPrimaryPhone(client) || 'N/A'} ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ ID: {getClientIdNumber(client) || 'N/A'}</p>
                       </div>
                     </div>
                     {selectedClient?.id === client.id && <CheckCircle2 className="text-blue-600" size={20} />}
@@ -7597,8 +6679,8 @@ function ApplicationsView({ clients, applications, role, sessionProfile, uploadD
                   { label: 'District', value: draft.mode === 'existing' ? selectedClient?.district || 'Existing profile' : draft.district || 'N/A' },
                   { label: 'Employment', value: formatEmploymentLabel(draft.employmentStatus) },
                   { label: 'Monthly Income', value: `MWK ${monthlyIncome.toLocaleString()}` },
-                  { label: 'Existing Debt', value: hasExistingLoanDetails ? `Yes â€¢ MWK ${outstandingBalance.toLocaleString()}` : 'No' },
-                  { label: 'Payment Details', value: usesBankingDetails ? `${draft.bankName || 'No bank selected'} â€¢ ${draft.bankAccountNumber || 'No account number'}` : `${draft.mobileMoneyProvider} â€¢ ${draft.mobileMoneyNumber || 'No number'}` },
+                  { label: 'Existing Debt', value: hasExistingLoanDetails ? `Yes ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ MWK ${outstandingBalance.toLocaleString()}` : 'No' },
+                  { label: 'Payment Details', value: usesBankingDetails ? `${draft.bankName || 'No bank selected'} ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ ${draft.bankAccountNumber || 'No account number'}` : `${draft.mobileMoneyProvider} ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ ${draft.mobileMoneyNumber || 'No number'}` },
                   { label: 'Loan Product', value: draft.loanProduct },
                   { label: 'Requested Amount', value: `MWK ${requestedAmount.toLocaleString()}` },
                   { label: 'Term', value: `${termMonths} months` },
@@ -7681,7 +6763,7 @@ function ApplicationsView({ clients, applications, role, sessionProfile, uploadD
               {applications.slice(0, 4).map(app => (
                 <div key={app.id} className="rounded-lg border border-slate-100 p-3">
                   <p className="text-sm font-bold text-slate-900">{app.clientSnapshot?.name || `Client ${app.clientId?.slice(0, 8) || 'N/A'}`}</p>
-                  <p className="text-[11px] text-slate-500">MWK {(app.requestedAmount || 0).toLocaleString()} â€¢ {app.status}</p>
+                  <p className="text-[11px] text-slate-500">MWK {(app.requestedAmount || 0).toLocaleString()} ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {app.status}</p>
                 </div>
               ))}
               {applications.length === 0 && (
@@ -7948,7 +7030,7 @@ function ApprovalsView({
                       <Badge className="bg-slate-100 text-slate-600 border-none text-[10px] font-bold">
                         {(app.current_stage || 'SUBMITTED').replace('_', ' ')}
                       </Badge>
-                      <p className="text-[11px] text-slate-400">â€¢ Created {getRelativeTimeLabel(app.createdAt)}</p>
+                      <p className="text-[11px] text-slate-400">ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ Created {getRelativeTimeLabel(app.createdAt)}</p>
                     </div>
                     <div className="mt-2">
                        <h4 className="font-bold text-[13px] text-foreground">Application #{app.id.slice(0, 8).toUpperCase()}</h4>
@@ -8408,7 +7490,7 @@ function RepaymentRow({ loan, role }: any) {
                 <div className="bg-slate-900 p-6 text-white flex justify-between items-center">
                   <div>
                     <h3 className="text-lg font-bold">Repayment Schedule</h3>
-                    <p className="text-slate-400 text-xs mt-1">Loan ID: #{id} â€¢ {loan.clientName}</p>
+                    <p className="text-slate-400 text-xs mt-1">Loan ID: #{id} ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {loan.clientName}</p>
                   </div>
                   <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" onClick={() => setShowSchedule(false)}>
                     <X size={20} />
@@ -8465,7 +7547,7 @@ function RepaymentRow({ loan, role }: any) {
                               <TableCell className="px-2 py-3">
                                 {item.penaltyAmount > 0 ? (
                                   <span className="text-red-600 font-bold">MWK {item.penaltyAmount.toLocaleString()}</span>
-                                ) : 'â€”'}
+                                ) : 'ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â'}
                               </TableCell>
                               <TableCell className="font-black px-2 py-3">MWK {(item.total + (item.penaltyAmount || 0)).toLocaleString()}</TableCell>
                               <TableCell className="px-2 py-3 text-emerald-600 font-bold">MWK {item.paidAmount?.toLocaleString() || 0}</TableCell>
@@ -8539,7 +7621,7 @@ function RepaymentAuditView({ transactions, loans, onVerifyRepayment }: { transa
                         </div>
                         <div>
                           <h3 className="font-black text-lg text-slate-900 tracking-tight">Repayment: MWK {tx.amount.toLocaleString()}</h3>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loan Ref: {tx.loanId.slice(-8).toUpperCase()} â€¢ {loan?.clientSnapshot?.name || 'Unknown Client'}</p>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loan Ref: {tx.loanId.slice(-8).toUpperCase()} ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {loan?.clientSnapshot?.name || 'Unknown Client'}</p>
                         </div>
                       </div>
                       <Badge className="bg-amber-50 text-amber-600 border-none font-black text-[10px] px-3 py-1.5 rounded-xl uppercase tracking-widest">PENDING VERIFICATION</Badge>
@@ -8982,7 +8064,7 @@ function LoanOfficerDashboardView({
                     <p className="font-semibold text-foreground">{item.clientName}</p>
                     <p className="text-[11px] text-muted-foreground mt-1">
                       {formatCurrency(item.application.requestedAmount || 0)} requested
-                      {' '}â€¢ KYC {item.kycStatus.replace(/_/g, ' ')}
+                      {' '}ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ KYC {item.kycStatus.replace(/_/g, ' ')}
                     </p>
                     <p className="text-[11px] text-muted-foreground mt-1">Exposure ratio: {item.exposureRatio ? `${item.exposureRatio.toFixed(1)}x monthly income` : 'Income not captured'}</p>
                   </div>
@@ -9055,991 +8137,6 @@ function LoanOfficerDashboardView({
   );
 }
 
-function StaffDashboardView({
-  clients,
-  loans,
-  applications,
-  onNavigate,
-  transactions,
-  profile,
-  showSuccessPanel = false,
-  onDismissSuccessPanel,
-}: {
-  clients: any[],
-  loans: any[],
-  applications: any[],
-  onNavigate: (view: View) => void,
-  transactions: any[],
-  profile: AuthProfile | null,
-  showSuccessPanel?: boolean,
-  onDismissSuccessPanel?: () => void,
-}) {
-  if (profile?.status === 'PENDING') {
-    return <PendingAgentWorkspace profile={profile} showSuccessPanel={showSuccessPanel} onDismissSuccessPanel={onDismissSuccessPanel} />;
-  }
-
-  const scopedClients = clients.filter(client => isCurrentAgentRecord(client, profile));
-  const scopedApplications = applications.filter(application => isCurrentAgentRecord(application, profile));
-  const scopedTransactions = transactions.filter(transaction => transaction.type === 'REPAYMENT' && isCurrentAgentRecord(transaction, profile));
-  const scopedClientIds = new Set(scopedClients.map(client => client.id));
-  const scopedLoans = loans.filter(loan => scopedClientIds.has(loan.clientId) || isCurrentAgentRecord(loan, profile));
-  const today = new Date().toLocaleDateString();
-  const todayCollections = scopedTransactions
-    .filter(tx => tx.timestamp?.toDate && tx.timestamp.toDate().toLocaleDateString() === today)
-    .reduce((sum, tx) => sum + (tx.amount || 0), 0);
-  const dueToday = scopedLoans.filter(loan => getLoanCollectionState(loan).label === 'Due Today').length;
-  const overdueCount = scopedLoans.filter(loan => getLoanCollectionState(loan).tone === 'overdue').length;
-  const recentCollections = scopedTransactions
-    .sort((left, right) => (getTimestampDate(right.timestamp)?.getTime() || 0) - (getTimestampDate(left.timestamp)?.getTime() || 0))
-    .slice(0, 4);
-  const collectionQueue = scopedLoans
-    .filter(loan => loan.status === 'ACTIVE' || loan.status === 'DEFAULTED')
-    .map(loan => {
-      const client = clients.find(item => item.id === loan.clientId);
-      return {
-        loan,
-        clientName: client ? getClientName(client) : 'Unknown Client',
-        installmentAmount: getLoanInstallmentAmount(loan),
-        state: getLoanCollectionState(loan),
-      };
-    })
-    .sort((left, right) => {
-      const leftDate = getTimestampDate(left.loan.nextDueDate || left.loan.disbursedAt || left.loan.createdAt)?.getTime() || Number.MAX_SAFE_INTEGER;
-      const rightDate = getTimestampDate(right.loan.nextDueDate || right.loan.disbursedAt || right.loan.createdAt)?.getTime() || Number.MAX_SAFE_INTEGER;
-      return leftDate - rightDate;
-    })
-    .slice(0, 5);
-  const totalOutstanding = scopedLoans.reduce((sum, loan) => sum + (loan.outstandingBalance || 0), 0);
-  const applicationProgress = scopedApplications.length
-    ? (scopedApplications.filter(application => application.status === 'APPROVED').length / scopedApplications.length) * 100
-    : 0;
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-5"
-    >
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">Agent Mission Control</h2>
-          <p className="text-[12px] text-muted-foreground">Quick situational awareness. No digging required.</p>
-        </div>
-        <div className="flex gap-2">
-          <Button 
-            onClick={() => onNavigate('payments')}
-            className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold gap-2 h-9"
-          >
-            <DollarSign size={16} /> Record Payment
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard 
-          title="Total Clients" 
-          value={scopedClients.length.toString()} 
-          trend="Registered by you" 
-          icon={<Users className="text-brand-500" size={18} />}
-          iconBg="bg-brand-50"
-        />
-        <StatCard 
-          title="Today's Collections" 
-          value={`MWK ${todayCollections.toLocaleString()}`} 
-          trend="Target: MWK 5,000" 
-          icon={<DollarSign className="text-emerald-500" size={18} />}
-          iconBg="bg-emerald-50"
-        />
-        <StatCard 
-          title="Due Today" 
-          value={dueToday.toString()} 
-          trend="Payments expected" 
-          icon={<Clock className="text-amber-500" size={18} />}
-          iconBg="bg-amber-50"
-        />
-        <StatCard 
-          title="Overdue Clients" 
-          value={overdueCount.toString()} 
-          trend="Requires follow-up" 
-          icon={<AlertCircle className="text-red-500" size={18} />}
-          iconBg="bg-red-50"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <Card className="lg:col-span-2 border border-border shadow-none rounded-lg bg-white overflow-hidden">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <h3 className="text-sm font-bold">Priority Collections</h3>
-            <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-brand-600" onClick={() => onNavigate('due-loans')}>VIEW ALL</Button>
-          </div>
-          <Table className="text-[12px]">
-            <TableHeader className="bg-[#F9FAFB]">
-              <TableRow className="hover:bg-transparent border-border">
-                <TableHead className="text-muted-foreground font-semibold h-10 px-4">Client</TableHead>
-                <TableHead className="text-muted-foreground font-semibold h-10 px-4">Amount Due</TableHead>
-                <TableHead className="text-muted-foreground font-semibold h-10 px-4">Status</TableHead>
-                <TableHead className="text-muted-foreground font-semibold h-10 px-4 text-right">Action</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {collectionQueue.map(item => (
-                    <TableRow key={item.loan.id} className="border-border">
-                      <TableCell className="px-4 py-3">
-                        <p className="font-bold">{item.clientName}</p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">ID: {item.loan.id.slice(0, 8).toUpperCase()}</p>
-                      </TableCell>
-                      <TableCell className="px-4 py-3 font-semibold">{formatCurrency(item.installmentAmount)}</TableCell>
-                      <TableCell className="px-4 py-3">
-                        <Badge className={item.state.tone === 'overdue' ? "bg-red-50 text-red-700 border-none text-[10px] font-bold" : item.state.tone === 'today' ? "bg-amber-50 text-amber-700 border-none text-[10px] font-bold" : "bg-blue-50 text-blue-700 border-none text-[10px] font-bold"}>
-                          {item.state.label}
-                        </Badge>
-                        <p className="text-[10px] text-muted-foreground mt-1">{item.state.helper}</p>
-                      </TableCell>
-                      <TableCell className="px-4 py-3 text-right">
-                        <Button size="sm" className="h-7 text-[10px] font-bold bg-brand-600" onClick={() => onNavigate('payments')}>COLLECT</Button>
-                      </TableCell>
-                    </TableRow>
-              ))}
-              {collectionQueue.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground italic">
-                    No priority collections at this time.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </Card>
-
-        <div className="space-y-5">
-          <Card className="border border-border shadow-none rounded-lg bg-white p-5">
-            <h3 className="text-sm font-bold mb-4">Quick Actions</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <Button 
-                variant="outline" 
-                className="flex flex-col items-center justify-center h-24 gap-2 border-border hover:bg-slate-50"
-                onClick={() => onNavigate('clients')}
-              >
-                <UserPlus size={20} className="text-brand-600" />
-                <span className="text-[11px] font-bold">New Client</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="flex flex-col items-center justify-center h-24 gap-2 border-border hover:bg-slate-50"
-                onClick={() => onNavigate('applications')}
-              >
-                <FileText size={20} className="text-blue-600" />
-                <span className="text-[11px] font-bold">New App</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="flex flex-col items-center justify-center h-24 gap-2 border-border hover:bg-slate-50"
-                onClick={() => onNavigate('payments')}
-              >
-                <DollarSign size={20} className="text-emerald-600" />
-                <span className="text-[11px] font-bold">Repayment</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                className="flex flex-col items-center justify-center h-24 gap-2 border-border hover:bg-slate-50"
-                onClick={() => onNavigate('due-loans')}
-              >
-                <Clock size={20} className="text-amber-600" />
-                <span className="text-[11px] font-bold">Due Loans</span>
-              </Button>
-            </div>
-          </Card>
-
-          <div className="bg-[#1A1C23] text-white p-5 rounded-lg space-y-4">
-            <div className="flex items-center gap-2 text-sidebar-foreground">
-              <TrendingUp size={16} />
-              <h4 className="font-bold text-[10px] uppercase tracking-widest text-sidebar-foreground">Your Performance</h4>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground mb-1.5">
-                  <span>Daily Target</span>
-                  <span>{Math.min(100, Math.round((todayCollections / 5000) * 100))}%</span>
-                </div>
-                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-brand-400" style={{ width: `${Math.min(100, (todayCollections / 5000) * 100)}%` }} />
-                </div>
-              </div>
-              <p className="text-[11px] text-sidebar-foreground">You've collected <span className="text-white font-bold">MWK {todayCollections.toLocaleString()}</span> today. {todayCollections >= 5000 ? "Goal reached! Excellent work." : `Just MWK ${(5000 - todayCollections).toLocaleString()} more to hit your goal!`}</p>
-              <div>
-                <div className="flex justify-between text-[10px] font-bold uppercase tracking-widest text-sidebar-foreground mb-1.5">
-                  <span>App Approval Rate</span>
-                  <span>{applicationProgress.toFixed(1)}%</span>
-                </div>
-                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-400" style={{ width: `${applicationProgress}%` }} />
-                </div>
-              </div>
-              <p className="text-[11px] text-sidebar-foreground">Outstanding field book under your care: <span className="text-white font-bold">{formatCurrency(totalOutstanding)}</span>.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        <Card className="border border-border shadow-none rounded-lg bg-white overflow-hidden">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold">Recent Collections</h3>
-              <p className="text-[12px] text-muted-foreground mt-1">Your latest successful repayments.</p>
-            </div>
-            <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-brand-600" onClick={() => onNavigate('transactions')}>VIEW HISTORY</Button>
-          </div>
-          <div className="p-4 space-y-3">
-            {recentCollections.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">No recorded collections yet.</p>
-            ) : (
-              recentCollections.map(transaction => (
-                <div key={transaction.id} className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
-                  <div>
-                    <p className="font-semibold text-foreground">{transaction.clientName || 'Unknown Client'}</p>
-                    <p className="text-[11px] text-muted-foreground mt-1">{formatDateTimeLabel(transaction.timestamp)}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-foreground">{formatCurrency(transaction.amount || 0)}</p>
-                    <p className="text-[11px] text-emerald-600 font-medium">{transaction.method || 'Recorded'}</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-
-        <Card className="border border-border shadow-none rounded-lg bg-white overflow-hidden">
-          <div className="p-4 border-b border-border flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-bold">Application Tracker</h3>
-              <p className="text-[12px] text-muted-foreground mt-1">Status of applications youâ€™ve submitted.</p>
-            </div>
-            <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-brand-600" onClick={() => onNavigate('applications')}>OPEN APPLICATIONS</Button>
-          </div>
-          <div className="p-4 space-y-3">
-            {scopedApplications.slice(0, 4).map(application => (
-              <div key={application.id} className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
-                <div>
-                  <p className="font-semibold text-foreground">{getApplicationClientLabel(application, clients)}</p>
-                  <p className="text-[11px] text-muted-foreground mt-1">{formatCurrency(application.requestedAmount || 0)} requested</p>
-                </div>
-                <Badge className={`border-none text-[10px] font-bold ${
-                  application.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-700' :
-                  application.status === 'REJECTED' ? 'bg-red-50 text-red-700' :
-                  'bg-amber-50 text-amber-700'
-                }`}>
-                  {application.status}
-                </Badge>
-              </div>
-            ))}
-            {scopedApplications.length === 0 && (
-              <p className="text-sm text-muted-foreground italic">No agent-submitted applications yet.</p>
-            )}
-          </div>
-        </Card>
-      </div>
-    </motion.div>
-  );
-}
-
-function PaymentModule({ clients, loans }: { clients: any[], loans: any[] }) {
-  const [step, setStep] = useState(1);
-  const [selectedClient, setSelectedClient] = useState<any>(null);
-  const [selectedLoan, setSelectedLoan] = useState<any>(null);
-  const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState('CASH');
-  const [reference, setReference] = useState('');
-  const [receipt, setReceipt] = useState<any>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const currentAgentEmail = getActiveSessionEmail();
-  const availableClients = mergeFirestoreWithLocal(clients, getLocalClients());
-  const availableLoans = mergeFirestoreWithLocal(loans, getLocalLoans());
-  const scopedClients = availableClients.filter(client => isCurrentAgentRecord(client));
-  const fallbackClients = scopedClients.length > 0 ? scopedClients : availableClients;
-  const filteredClients = fallbackClients.filter(client =>
-    [getClientName(client), getClientPrimaryPhone(client), getClientIdNumber(client)]
-      .some(value => String(value || '').toLowerCase().includes(searchQuery.toLowerCase()))
-  );
-
-  const handleRecordPayment = async () => {
-    try {
-      const paymentAmount = parseFloat(amount);
-      if (!selectedClient || !selectedLoan) {
-        toast.error('Select a client and loan before recording payment.');
-        return;
-      }
-      if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
-        toast.error('Enter a valid repayment amount.');
-        return;
-      }
-      if (paymentAmount > (selectedLoan.outstandingBalance || 0)) {
-        toast.error('Repayment amount cannot exceed the outstanding balance.');
-        return;
-      }
-      if ((method === 'AIRTEL_MONEY' || method === 'MPAMBA' || method === 'BANK_TRANSFER') && !reference.trim()) {
-        toast.error('Electronic payments require a transaction reference.');
-        return;
-      }
-
-      // Phase 5: Simulate payment via MockPaymentService
-      const paymentResult = await MockPaymentService.processRepayment(
-        selectedLoan.id, paymentAmount, getClientName(selectedClient), method as PaymentMethod
-      );
-
-      // Use the Phase 3 Financial Engine
-      const success = await processRepayment(
-        selectedLoan, 
-        paymentAmount, 
-        currentAgentEmail, 
-        method, 
-        reference.trim() || paymentResult.reference
-      );
-
-      if (success) {
-        const paymentData = {
-          clientName: getClientName(selectedClient),
-          loanId: selectedLoan.id,
-          amount: paymentAmount,
-          method,
-          reference: reference.trim(),
-          date: new Date().toLocaleString(),
-          receiptId: `RCP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-          balanceRemaining: Math.max(0, (selectedLoan.outstandingBalance || 0) - paymentAmount)
-        };
-        setReceipt(paymentData);
-        setStep(3);
-      }
-    } catch (e) {
-      toast.error("Failed to process repayment.");
-    }
-  };
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="max-w-2xl mx-auto space-y-6"
-    >
-      <div className="text-center space-y-2">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">Payment Collection</h2>
-        <p className="text-sm text-muted-foreground">Record repayments via Cash or Mobile Money.</p>
-      </div>
-
-      <Card className="border border-border shadow-none rounded-xl bg-white overflow-hidden">
-        <div className="p-6">
-          {step === 1 && (
-            <div className="space-y-4">
-              <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Step 1: Select Client & Loan</h3>
-              <div className="space-y-3">
-                <label className="text-xs font-bold text-foreground">Select Client</label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <Input
-                    placeholder="Search assigned clients..."
-                    className="pl-10 h-10 border-border bg-white"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-                <div className="grid grid-cols-1 gap-2 max-h-48 overflow-auto p-1">
-                  {filteredClients.map(client => (
-                    <button 
-                      key={client.id}
-                      onClick={() => {
-                        setSelectedClient(client);
-                        setSelectedLoan(null);
-                      }}
-                      className={`p-3 text-left border rounded-lg transition-all ${selectedClient?.id === client.id ? 'border-brand-500 bg-brand-50' : 'border-border hover:bg-slate-50'}`}
-                    >
-                      <p className="text-sm font-bold">{getClientName(client)}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">{getClientPrimaryPhone(client) || client.id.slice(0, 8).toUpperCase()}</p>
-                    </button>
-                  ))}
-                  {filteredClients.length === 0 && (
-                    <p className="text-xs text-muted-foreground italic py-3">No matching clients found for this agent.</p>
-                  )}
-                </div>
-              </div>
-
-              {selectedClient && (
-                <div className="space-y-3 pt-4">
-                  <label className="text-xs font-bold text-foreground">Select Active Loan</label>
-                  <div className="grid grid-cols-1 gap-2">
-                    {availableLoans.filter(l => l.clientId === selectedClient.id && l.status === 'ACTIVE').map(loan => (
-                      <button 
-                        key={loan.id}
-                        onClick={() => setSelectedLoan(loan)}
-                        className={`p-3 text-left border rounded-lg transition-all ${selectedLoan?.id === loan.id ? 'border-brand-500 bg-brand-50' : 'border-border hover:bg-slate-50'}`}
-                      >
-                        <div className="flex justify-between items-center">
-                          <p className="text-sm font-bold">Loan #{loan.id.slice(0, 8).toUpperCase()}</p>
-                          <p className="text-sm font-bold text-brand-600">MWK {(loan.outstandingBalance || 0).toLocaleString()}</p>
-                        </div>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Outstanding Balance</p>
-                      </button>
-                    ))}
-                    {availableLoans.filter(l => l.clientId === selectedClient.id && l.status === 'ACTIVE').length === 0 && (
-                      <p className="text-xs text-red-500 font-medium italic">No active loans found for this client.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              <Button 
-                disabled={!selectedLoan}
-                onClick={() => setStep(2)}
-                className="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold h-11 mt-6"
-              >
-                CONTINUE TO PAYMENT
-              </Button>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-6">
-                <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-lg border border-border">
-                <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold">
-                  {getClientName(selectedClient).charAt(0)}
-                </div>
-                <div>
-                  <p className="text-sm font-bold">{getClientName(selectedClient)}</p>
-                  <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest">Loan #{selectedLoan.id.slice(0, 8).toUpperCase()}</p>
-                </div>
-                <div className="ml-auto text-right">
-                  <p className="text-sm font-bold text-brand-600">MWK {(selectedLoan.outstandingBalance || 0).toLocaleString()}</p>
-                  <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest">Balance</p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-foreground">Repayment Amount</label>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <Input 
-                      type="number" 
-                      placeholder="0.00" 
-                      className="pl-10 h-12 text-lg font-bold border-border" 
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-foreground">Payment Method</label>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    {['CASH', 'AIRTEL_MONEY', 'MPAMBA', 'BANK_TRANSFER'].map(m => (
-                      <button 
-                        key={m}
-                        onClick={() => setMethod(m)}
-                        className={`py-3 border rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${method === m ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-border text-muted-foreground hover:bg-slate-50'}`}
-                      >
-                        {m.replace('_', ' ')}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {method !== 'CASH' && (
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-foreground">Transaction Reference</label>
-                    <div className="relative">
-                      <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                      <Input 
-                        placeholder="Enter reference number (optional, will generate mock ref if blank)..." 
-                        className="pl-10 h-11 border-border font-mono text-sm" 
-                        value={reference}
-                        onChange={(e) => setReference(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <Button variant="outline" className="flex-1 h-11 font-bold border-border" onClick={() => setStep(1)}>BACK</Button>
-                <Button 
-                  disabled={!amount || parseFloat(amount) <= 0}
-                  className="flex-[2] h-11 bg-brand-600 hover:bg-brand-700 text-white font-bold"
-                  onClick={handleRecordPayment}
-                >
-                  CONFIRM COLLECTION
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {step === 3 && receipt && (
-            <div className="space-y-6 text-center py-4">
-              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <CheckCircle2 size={32} />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-foreground">Payment Successful</h3>
-                <p className="text-sm text-muted-foreground">The transaction has been recorded in the ledger.</p>
-              </div>
-
-              <div className="bg-slate-50 border border-border rounded-xl p-6 text-left space-y-4 font-mono">
-                <div className="flex justify-between items-center border-b border-slate-200 pb-3">
-                  <h4 className="text-xs font-bold uppercase tracking-widest text-slate-400">Official Receipt</h4>
-                  <p className="text-[10px] text-slate-400">{receipt.date}</p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-[11px] text-slate-500">CLIENT:</span>
-                    <span className="text-[11px] font-bold text-slate-900">{receipt.clientName}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[11px] text-slate-500">LOAN ID:</span>
-                    <span className="text-[11px] font-bold text-slate-900">#{receipt.loanId.slice(0, 8).toUpperCase()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[11px] text-slate-500">COLLECTED BY:</span>
-                    <span className="text-[11px] font-bold text-slate-900">{currentAgentEmail || 'Agent'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[11px] text-slate-500">METHOD:</span>
-                    <span className="text-[11px] font-bold text-slate-900">{receipt.method}</span>
-                  </div>
-                  {receipt.reference && (
-                    <div className="flex justify-between">
-                      <span className="text-[11px] text-slate-500">REF:</span>
-                      <span className="text-[11px] font-bold text-slate-900">{receipt.reference}</span>
-                    </div>
-                  )}
-                  <Separator className="my-2" />
-                  <div className="flex justify-between text-lg">
-                    <span className="font-bold text-slate-500">PAID:</span>
-                    <span className="font-black text-brand-600">MWK {receipt.amount.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-[11px] text-slate-500">BALANCE:</span>
-                    <span className="text-[11px] font-bold text-slate-900">MWK {receipt.balanceRemaining.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <Button
-                  variant="outline"
-                  className="flex-1 h-11 font-bold border-border gap-2"
-                  onClick={() => toast.success('Receipt ready for print/download from your browser window.')}
-                >
-                  <FileDown size={18} /> DOWNLOAD
-                </Button>
-                <Button 
-                  className="flex-1 h-11 bg-brand-600 hover:bg-brand-700 text-white font-bold"
-                  onClick={() => {
-                    setStep(1);
-                    setSelectedClient(null);
-                    setSelectedLoan(null);
-                    setAmount('');
-                    setReference('');
-                    setSearchQuery('');
-                  }}
-                >
-                  NEW PAYMENT
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      </Card>
-    </motion.div>
-  );
-}
-
-function AgentClientsView({ clients, loans }: { clients: any[], loans: any[] }) {
-  const [search, setSearch] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [formData, setFormData] = useState({ name: '', phone: '', idNumber: '' });
-  const availableClients = mergeFirestoreWithLocal(clients, getLocalClients());
-  const availableLoans = mergeFirestoreWithLocal(loans, getLocalLoans());
-  const scopedClients = availableClients.filter(client => isCurrentAgentRecord(client));
-  const visibleClients = scopedClients.length > 0 ? scopedClients : availableClients;
-
-  const filteredClients = visibleClients.filter(c => 
-    getClientName(c).toLowerCase().includes(search.toLowerCase()) || 
-    getClientPrimaryPhone(c).includes(search) || 
-    getClientIdNumber(c)?.includes(search)
-  );
-
-  const handleRegister = async () => {
-    // Prevent duplicates check
-    const exists = availableClients.find(c => c.idNumber === formData.idNumber || c.phone === formData.phone);
-    if (exists) {
-      toast.error("Duplicate Registration: A client with this ID or Phone already exists.");
-      return;
-    }
-
-    try {
-      await addDoc(collection(db, 'clients'), {
-        ...formData,
-        status: 'ACTIVE',
-        metadata: {
-          createdBy: {
-            uid: auth.currentUser?.uid || 'local-agent',
-            email: getActiveSessionEmail(),
-            role: 'AGENT',
-          },
-          registrationDate: serverTimestamp(),
-          lastUpdatedAt: serverTimestamp(),
-        },
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      toast.success("Client registered successfully");
-      setIsRegistering(false);
-      setFormData({ name: '', phone: '', idNumber: '' });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'clients');
-    }
-  };
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-5"
-    >
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">Client Management</h2>
-          <p className="text-[12px] text-muted-foreground">Register and search clients in the field.</p>
-        </div>
-        <Button 
-          onClick={() => setIsRegistering(true)}
-          className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold gap-2 h-9"
-        >
-          <UserPlus size={16} /> Register New Client
-        </Button>
-      </div>
-
-      <Card className="border border-border shadow-none rounded-lg bg-white overflow-hidden">
-        <div className="p-4 border-b border-border bg-slate-50/50">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            <Input 
-              placeholder="Search by Name, Phone or ID..." 
-              className="pl-10 h-10 border-border bg-white" 
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-        <Table className="text-[12px]">
-          <TableHeader className="bg-[#F9FAFB]">
-            <TableRow className="hover:bg-transparent border-border">
-              <TableHead className="text-muted-foreground font-semibold h-10 px-4">Client Details</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-10 px-4">Phone</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-10 px-4">ID Number</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-10 px-4 text-center">Active Loans</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-10 px-4 text-right">Action</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredClients.map(client => {
-              const activeLoansCount = availableLoans.filter(l => l.clientId === client.id && l.status === 'ACTIVE').length;
-              return (
-                <TableRow key={client.id} className="border-border">
-                  <TableCell className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8 border border-border">
-                        <AvatarFallback className="bg-slate-100 text-slate-600 text-[10px] font-bold">
-                          {getClientName(client).charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <p className="font-bold text-foreground">{getClientName(client)}</p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-muted-foreground font-medium">{getClientPrimaryPhone(client) || 'N/A'}</TableCell>
-                  <TableCell className="px-4 py-3 text-muted-foreground font-mono">{getClientIdNumber(client) || 'N/A'}</TableCell>
-                  <TableCell className="px-4 py-3 text-center font-bold text-brand-600">{activeLoansCount}</TableCell>
-                  <TableCell className="px-4 py-3 text-right">
-                    <Button variant="ghost" size="sm" className="h-8 text-[11px] font-bold text-brand-600" onClick={() => toast.info(`${getClientName(client)} has ${activeLoansCount} active loan(s).`)}>
-                      VIEW PROFILE
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-            {filteredClients.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">
-                  No clients found matching your search.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-
-      <AnimatePresence>
-        {isRegistering && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="max-w-md w-full"
-            >
-              <Card className="border-none shadow-2xl rounded-xl overflow-hidden">
-                <div className="bg-brand-600 p-6 text-white">
-                  <h3 className="text-lg font-bold">Register New Client</h3>
-                  <p className="text-brand-100 text-xs mt-1">Ensure all field data is accurate to prevent duplicates.</p>
-                </div>
-                <CardContent className="p-6 space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700">Full Legal Name</label>
-                    <Input 
-                      placeholder="Enter full name..." 
-                      className="border-border" 
-                      value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700">Phone Number</label>
-                    <Input 
-                      placeholder="e.g. +265..." 
-                      className="border-border" 
-                      value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700">National ID / Passport</label>
-                    <Input 
-                      placeholder="Enter ID number..." 
-                      className="border-border" 
-                      value={formData.idNumber}
-                      onChange={(e) => setFormData({...formData, idNumber: e.target.value})}
-                    />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <Button variant="outline" className="flex-1 font-bold border-border" onClick={() => setIsRegistering(false)}>CANCEL</Button>
-                    <Button 
-                      disabled={!formData.name || !formData.phone || !formData.idNumber}
-                      className="flex-1 bg-brand-600 hover:bg-brand-700 text-white font-bold"
-                      onClick={handleRegister}
-                    >
-                      REGISTER
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
-
-function AgentTransactionsView({ transactions }: { transactions: any[] }) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [methodFilter, setMethodFilter] = useState('ALL');
-  const availableTransactions = mergeFirestoreWithLocal(transactions, getLocalTransactions());
-  const scopedTransactions = availableTransactions
-    .filter(transaction => transaction.type === 'REPAYMENT' && isCurrentAgentRecord(transaction))
-    .filter(transaction => {
-      const matchesSearch = [transaction.clientName, transaction.reference, transaction.id]
-        .some(value => String(value || '').toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesMethod = methodFilter === 'ALL' || transaction.method === methodFilter;
-      return matchesSearch && matchesMethod;
-    });
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-5"
-    >
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">Transaction History</h2>
-          <p className="text-[12px] text-muted-foreground">Accountability and memory of all collections.</p>
-        </div>
-        <div className="flex gap-2">
-          <div className="relative w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
-            <Input
-              placeholder="Search client or ref..."
-              className="pl-9 h-9 text-xs bg-white"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <select className="h-9 rounded-lg border border-border bg-white px-3 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500" value={methodFilter} onChange={(e) => setMethodFilter(e.target.value)}>
-            <option value="ALL">All Methods</option>
-            <option value="CASH">Cash</option>
-            <option value="AIRTEL">Airtel</option>
-            <option value="MPAMBA">Mpamba</option>
-          </select>
-        </div>
-      </div>
-
-      <Card className="border border-border shadow-none rounded-lg bg-white overflow-hidden">
-        <Table className="text-[12px]">
-          <TableHeader className="bg-[#F9FAFB]">
-            <TableRow className="hover:bg-transparent border-border">
-              <TableHead className="text-muted-foreground font-semibold h-10 px-4">Date & Time</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-10 px-4">Client</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-10 px-4">Amount</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-10 px-4">Method</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-10 px-4 text-right">Receipt</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {scopedTransactions.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center py-12 text-muted-foreground italic">
-                  No transactions found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              scopedTransactions.map(tx => (
-                <TableRow key={tx.id} className="border-border">
-                  <TableCell className="px-4 py-3">
-                    <p className="font-bold">{formatDateLabel(tx.timestamp)}</p>
-                    <p className="text-[10px] text-muted-foreground font-mono">{formatDateTimeLabel(tx.timestamp)}</p>
-                  </TableCell>
-                  <TableCell className="px-4 py-3 font-medium text-foreground">{tx.clientName || 'Unknown Client'}</TableCell>
-                  <TableCell className="px-4 py-3 font-bold text-emerald-600">MWK {tx.amount?.toLocaleString()}</TableCell>
-                  <TableCell className="px-4 py-3">
-                    <Badge variant="outline" className="text-[10px] font-bold border-border text-muted-foreground">
-                      {tx.method}
-                    </Badge>
-                    {tx.reference && <p className="text-[10px] text-muted-foreground mt-1 font-mono">{tx.reference}</p>}
-                  </TableCell>
-                  <TableCell className="px-4 py-3 text-right">
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-brand-600" onClick={() => toast.success(`Receipt lookup ready for ${tx.clientName || 'client'}.`)}>
-                      <Receipt size={16} />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-    </motion.div>
-  );
-}
-
-function AgentDueLoansView({ loans, clients, onNavigate }: { loans: any[], clients: any[], onNavigate: (view: View) => void }) {
-  const availableClients = mergeFirestoreWithLocal(clients, getLocalClients());
-  const availableLoans = mergeFirestoreWithLocal(loans, getLocalLoans());
-  const scopedClients = availableClients.filter(client => isCurrentAgentRecord(client));
-  const visibleClientIds = new Set((scopedClients.length > 0 ? scopedClients : availableClients).map(client => client.id));
-  const scopedLoans = availableLoans.filter(loan => visibleClientIds.has(loan.clientId) || isCurrentAgentRecord(loan));
-  const activeLoans = scopedLoans.filter(l => l.status === 'ACTIVE');
-  const overdue = scopedLoans.filter(l => getLoanCollectionState(l).tone === 'overdue');
-  const dueToday = activeLoans.filter(l => getLoanCollectionState(l).label === 'Due Today');
-  const upcoming = activeLoans.filter(l => getLoanCollectionState(l).label !== 'Due Today' && (l.outstandingBalance || 0) > 0);
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-5"
-    >
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">Due & Overdue Tracking</h2>
-          <p className="text-[12px] text-muted-foreground">Collectors with intelligence. Know who to visit.</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        <Card className="border border-border shadow-none rounded-lg bg-white overflow-hidden">
-          <div className="p-4 border-b border-border bg-amber-50/50 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-amber-900">Due Today</h3>
-            <Badge className="bg-amber-100 text-amber-700 border-none">{dueToday.length} PAYMENTS</Badge>
-          </div>
-          <div className="p-4 space-y-3">
-            {dueToday.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4 italic">No payments due today.</p>
-            ) : (
-              dueToday.map(loan => {
-                const client = clients.find(c => c.id === loan.clientId);
-                return (
-                  <div key={loan.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-slate-50 transition-colors">
-                    <div>
-                      <p className="text-sm font-bold">{client?.name || 'Unknown Client'}</p>
-                      <p className="text-[10px] text-muted-foreground">Due: {formatCurrency(getLoanInstallmentAmount(loan))}</p>
-                    </div>
-                    <Button size="sm" className="h-8 text-[10px] font-bold bg-brand-600" onClick={() => onNavigate('payments')}>RECORD PAYMENT</Button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </Card>
-
-        <Card className="border border-border shadow-none rounded-lg bg-white overflow-hidden">
-          <div className="p-4 border-b border-border bg-blue-50/50 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-blue-900">Upcoming</h3>
-            <Badge className="bg-blue-100 text-blue-700 border-none">{upcoming.length} LOANS</Badge>
-          </div>
-          <div className="p-4 space-y-3">
-            {upcoming.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4 italic">No upcoming installments queued.</p>
-            ) : (
-              upcoming.slice(0, 6).map(loan => {
-                const client = clients.find(c => c.id === loan.clientId);
-                const state = getLoanCollectionState(loan);
-                return (
-                  <div key={loan.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-slate-50 transition-colors">
-                    <div>
-                      <p className="text-sm font-bold">{client ? getClientName(client) : 'Unknown Client'}</p>
-                      <p className="text-[10px] text-blue-600 font-bold">{state.helper}</p>
-                    </div>
-                    <p className="text-[11px] font-bold text-slate-700">{formatCurrency(getLoanInstallmentAmount(loan))}</p>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </Card>
-
-        <Card className="border border-border shadow-none rounded-lg bg-white overflow-hidden">
-          <div className="p-4 border-b border-border bg-red-50/50 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-red-900">Overdue</h3>
-            <Badge className="bg-red-100 text-red-700 border-none">{overdue.length} ARREARS</Badge>
-          </div>
-          <div className="p-4 space-y-3">
-            {overdue.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-4 italic">No overdue loans found.</p>
-            ) : (
-              overdue.map(loan => {
-                const client = clients.find(c => c.id === loan.clientId);
-                return (
-                  <div key={loan.id} className="flex items-center justify-between p-3 border border-border rounded-lg hover:bg-slate-50 transition-colors">
-                    <div>
-                      <p className="text-sm font-bold">{client?.name || 'Unknown Client'}</p>
-                      <p className="text-[10px] text-red-600 font-bold">Balance: MWK { (loan.outstandingBalance || 0).toLocaleString() }</p>
-                    </div>
-                    <Button size="sm" className="h-8 text-[10px] font-bold bg-red-600" onClick={() => onNavigate('payments')}>FOLLOW UP</Button>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </Card>
-      </div>
-    </motion.div>
-  );
-}
 
 function LoanProductsView({ products }: { products: LoanProduct[] }) {
   const [isAdding, setIsAdding] = useState(false);
@@ -10685,7 +8782,7 @@ function ReportsView({
               value={dateRange.start}
               onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
             />
-            <span className="text-slate-300 mx-1">â†’</span>
+            <span className="text-slate-300 mx-1">ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢</span>
             <input 
               type="date" 
               className="bg-transparent border-none text-[11px] font-bold focus:ring-0 p-0 text-slate-700" 
@@ -11790,15 +9887,15 @@ function SettingsView({
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                           <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Current Password</label>
-                            <Input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
+                            <Input type="password" placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢" />
                           </div>
                           <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">New Password</label>
-                            <Input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
+                            <Input type="password" placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢" />
                           </div>
                           <div className="space-y-2">
                             <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Confirm New</label>
-                            <Input type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" />
+                            <Input type="password" placeholder="ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢" />
                           </div>
                         </div>
                         <Button size="sm" className="bg-slate-900 text-white hover:bg-slate-800">Update Password</Button>
@@ -12451,7 +10548,7 @@ function ClientDashboardView({ loans, receipts, profile, onNavigate, onPay, onVi
                       <Badge className="bg-emerald-50 text-emerald-600 text-[8px] font-black px-2 py-0.5 rounded-lg border-none shadow-sm">{rcpt.status}</Badge>
                     </div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                      <span className="text-brand-600">{rcpt.receiptId}</span> â€¢ {new Date(rcpt.date).toLocaleDateString()} at {new Date(rcpt.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      <span className="text-brand-600">{rcpt.receiptId}</span> ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ {new Date(rcpt.date).toLocaleDateString()} at {new Date(rcpt.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>

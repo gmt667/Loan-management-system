@@ -46,6 +46,8 @@
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
 
+    --color-brand-50:  #E8FFFE;
+    --color-brand-100: #BDFCF9;
     --color-brand-200: #57F6E7;
     --color-brand-300: #42DAD9;
     --color-brand-400: #30B2BE;
@@ -81,13 +83,13 @@
     --chart-4: #EF4444;
     --chart-5: #6366F1;
     --radius: 0.375rem;
-    --sidebar: #032D4D;
-    --sidebar-foreground: #9E9E9E;
+    --sidebar: #04243D;
+    --sidebar-foreground: #8BA8BA;
     --sidebar-primary: #208CA2;
     --sidebar-primary-foreground: #FFFFFF;
-    --sidebar-accent: rgba(255, 255, 255, 0.05);
+    --sidebar-accent: rgba(255, 255, 255, 0.06);
     --sidebar-accent-foreground: #FFFFFF;
-    --sidebar-border: rgba(255, 255, 255, 0.1);
+    --sidebar-border: rgba(255, 255, 255, 0.08);
     --sidebar-ring: #208CA2;
 }
 
@@ -137,7 +139,180 @@
     }
 }
 
-/* Financial Receipt Print Standards */
+/* =============================================
+   RESPONSIVE LAYOUT — Mobile-First
+   ============================================= */
+
+/* Sidebar overlay for mobile */
+.sidebar-mobile-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 20, 35, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 40;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Sidebar slide-in on mobile */
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+.sidebar-mobile-enter {
+  animation: slideInLeft 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* =============================================
+   PREMIUM ANIMATIONS
+   ============================================= */
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes pulseRing {
+  0%   { box-shadow: 0 0 0 0 rgba(32, 140, 162, 0.4); }
+  70%  { box-shadow: 0 0 0 8px rgba(32, 140, 162, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(32, 140, 162, 0); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes progressFill {
+  from { width: 0%; }
+  to   { width: var(--progress-width, 100%); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Staggered card animations */
+.stagger-children > * {
+  animation: slideUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.stagger-children > *:nth-child(1)  { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2)  { animation-delay: 60ms; }
+.stagger-children > *:nth-child(3)  { animation-delay: 120ms; }
+.stagger-children > *:nth-child(4)  { animation-delay: 180ms; }
+.stagger-children > *:nth-child(5)  { animation-delay: 240ms; }
+.stagger-children > *:nth-child(6)  { animation-delay: 300ms; }
+
+/* Progress bar animated fill */
+.progress-bar-animated {
+  animation: progressFill 1s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: 300ms;
+}
+
+/* Shimmer loading skeleton */
+.shimmer-bg {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Pulse indicator for live data */
+.live-indicator {
+  animation: pulseRing 2s infinite;
+}
+
+/* =============================================
+   KPI METRIC CARDS — Officer Dashboard
+   ============================================= */
+
+.officer-kpi-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 16px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.officer-kpi-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 40px -12px rgba(0,0,0,0.18);
+}
+
+.officer-kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 4px;
+  height: 100%;
+  border-radius: 4px 0 0 4px;
+}
+
+.officer-kpi-card.accent-teal::before  { background: linear-gradient(180deg, #30B2BE, #042D4D); }
+.officer-kpi-card.accent-amber::before { background: linear-gradient(180deg, #F59E0B, #D97706); }
+.officer-kpi-card.accent-emerald::before { background: linear-gradient(180deg, #10B981, #059669); }
+.officer-kpi-card.accent-violet::before { background: linear-gradient(180deg, #8B5CF6, #6D28D9); }
+.officer-kpi-card.accent-rose::before   { background: linear-gradient(180deg, #F43F5E, #BE123C); }
+
+/* =============================================
+   GLASSMORPHISM HERO — Officer Command Center
+   ============================================= */
+
+.officer-hero {
+  background: linear-gradient(135deg, #04243D 0%, #0A4969 50%, #146886 100%);
+  border-radius: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.officer-hero::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 280px; height: 280px;
+  background: radial-gradient(circle, rgba(48, 178, 190, 0.25) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.officer-hero::after {
+  content: '';
+  position: absolute;
+  bottom: -80px; left: 30%;
+  width: 200px; height: 200px;
+  background: radial-gradient(circle, rgba(32, 140, 162, 0.15) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* =============================================
+   NAV ITEM REFINEMENT
+   ============================================= */
+
+.nav-item-active {
+  background: linear-gradient(90deg, rgba(48, 178, 190, 0.12) 0%, transparent 100%);
+  border-left-color: #30B2BE !important;
+  color: #FFFFFF !important;
+}
+
+.nav-item-active .nav-icon {
+  color: #30B2BE;
+}
+
+/* =============================================
+   FINANCIAL RECEIPT PRINT STANDARDS
+   ============================================= */
+
 @media print {
   @page {
     size: A4;
@@ -148,7 +323,6 @@
     visibility: hidden;
   }
 
-  /* Only show the receipt modal content */
   div.fixed.inset-0.z-\[100\], 
   div.fixed.inset-0.z-\[100\] * {
     visibility: visible;
@@ -165,7 +339,6 @@
     backdrop-filter: none !important;
   }
 
-  /* Reset layout for print */
   .bg-white.rounded-\[2\.5rem\] {
     border: none !important;
     box-shadow: none !important;
@@ -186,7 +359,6 @@
     position: static !important;
   }
 
-  /* Institutional Fidelity */
   h1, h2, h3, p, span {
     color: black !important;
   }
