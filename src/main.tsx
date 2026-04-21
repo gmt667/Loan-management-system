@@ -8,7 +8,7 @@ const SafeThemeProvider = ThemeProvider as any;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <SafeThemeProvider attribute="class" defaultTheme="system" enableSystem>
+    <SafeThemeProvider attribute="data-theme" defaultTheme="system" enableSystem>
       <App />
     </SafeThemeProvider>
   </StrictMode>,

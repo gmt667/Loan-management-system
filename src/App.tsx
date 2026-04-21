@@ -2297,7 +2297,7 @@ function App() {
     if (loans.length === 0) return;
     runDailyAutomation(loans, loanProducts);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, sessionProfile?.id, loans.length]);
+  }, [isAuthenticated, sessionProfile?.id, loans.length, loanProducts]);
 
   // Profile Specific Listener
   useEffect(() => {
@@ -2318,7 +2318,7 @@ function App() {
       }
     });
     return () => unsubProfile();
-  }, [isAuthenticated, authProfile?.id, localSessionProfile?.id]);
+  }, [isAuthenticated, authProfile, localSessionProfile]);
 
   // Auto-Logout & Session Sync
   useEffect(() => {
@@ -4221,43 +4221,23 @@ function App() {
             )}
             {currentView === 'settings' && (
               <motion.div key="settings">
-                {role === 'CLIENT' ? (
-                  <ClientDashboardView 
-                    view="settings"
-                    loans={[]}
-                    receipts={[]}
-                    repaymentSchedules={[]}
-                    profile={sessionProfile}
-                    notifications={[]}
-                    onNavigate={(v) => setCurrentView(v)}
-                    onPay={() => {}}
-                    onViewReceipt={() => {}}
-                    handleLogout={handleLogout}
-                    settings={clientSettings}
-                    onUpdateSettings={async (s) => setClientSettings(s)}
-                    clients={clients}
-                    applications={applications}
-                    uploadDocument={uploadDocument}
-                  />
-                ) : (
-                  <SettingsView 
-                    profile={sessionProfile!} 
-                    systemSettings={systemSettings}
-                    onUpdateSystemSettings={(settings) => {
-                      setSystemSettings(settings);
-                      setDoc(doc(db, 'system_settings', 'global'), settings);
-                    }}
-                    onUpdateProfile={(updatedProfile) => {
-                      if (sessionProfile?.id.startsWith('demo-')) {
-                        saveLocalUser(updatedProfile);
-                        setLocalSessionProfile(updatedProfile);
-                      } else {
-                        updateDoc(doc(db, 'users', sessionProfile!.id), updatedProfile as any);
-                      }
-                      toast.success("Profile updated successfully.");
-                    }}
-                  />
-                )}
+                <SettingsView 
+                  profile={sessionProfile!} 
+                  systemSettings={systemSettings}
+                  onUpdateSystemSettings={(settings) => {
+                    setSystemSettings(settings);
+                    setDoc(doc(db, 'system_settings', 'global'), settings);
+                  }}
+                  onUpdateProfile={(updatedProfile) => {
+                    if (sessionProfile?.id.startsWith('demo-')) {
+                      saveLocalUser(updatedProfile);
+                      setLocalSessionProfile(updatedProfile);
+                    } else {
+                      updateDoc(doc(db, 'users', sessionProfile!.id), updatedProfile as any);
+                    }
+                    toast.success("Profile updated successfully.");
+                  }}
+                />
               </motion.div>
             )}
             {currentView === 'automation-center' && (role === 'ADMIN' || role === 'MANAGER') && (
@@ -12256,6 +12236,7 @@ function ClientDashboardView({
   onUpdateSettings: (newSettings: any) => Promise<void>,
   uploadDocument: any
 }) {
+  const { theme, setTheme } = useNextTheme();
   const [loanSubTab, setLoanSubTab] = useState<'my' | 'apply' | 'status' | 'schedule'>('my');
   const [receiptSearch, setReceiptSearch] = useState('');
   const [isEditingProfile, setIsEditingProfile] = useState(false);
