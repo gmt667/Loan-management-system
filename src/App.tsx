@@ -38,7 +38,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   ShieldAlert,
-  BarChart3
+  BarChart3,
+  Menu,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -272,7 +274,6 @@ const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const normalizeUserStatus = (status?: string): UserStatus =>
   status === 'INACTIVE' ? 'SUSPENDED' : ((status as UserStatus) || 'ACTIVE');
 
-<<<<<<< HEAD
 const LOCAL_USERS_KEY = 'giantfluid_local_users';
 const LEGACY_USERS_KEY = 'fastkwacha_local_users';
 const LOCAL_CLIENTS_KEY = 'giantfluid_local_clients';
@@ -283,15 +284,6 @@ const LEGACY_APPLICATIONS_KEY = 'fastkwacha_local_apps';
 const getLocalUsers = (): AuthProfile[] => {
   try {
     const data = localStorage.getItem(LOCAL_USERS_KEY) || localStorage.getItem(LEGACY_USERS_KEY);
-=======
-const LOCAL_USERS_KEY = 'fastkwacha_local_users';
-const LOCAL_CLIENTS_KEY = 'fastkwacha_local_clients';
-const LOCAL_APPLICATIONS_KEY = 'fastkwacha_local_apps';
-
-const getLocalUsers = (): AuthProfile[] => {
-  try {
-    const data = localStorage.getItem(LOCAL_USERS_KEY);
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
     return data ? JSON.parse(data) : [];
   } catch {
     return [];
@@ -353,21 +345,13 @@ const removeLocalUser = (userId: string) => {
   const users = getLocalUsers().filter(u => u.id !== userId);
   localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
 };
-<<<<<<< HEAD
 const LOCAL_SESSION_STORAGE_KEY = 'giantfluid-local-session';
 const LEGACY_SESSION_STORAGE_KEY = 'fastkwacha-local-session';
-=======
-const LOCAL_SESSION_STORAGE_KEY = 'fastkwacha-local-session';
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
 
 const readStoredLocalSessionProfile = (): AuthProfile | null => {
   if (typeof window === 'undefined') return null;
   try {
-<<<<<<< HEAD
     const raw = window.localStorage.getItem(LOCAL_SESSION_STORAGE_KEY) || window.localStorage.getItem(LEGACY_SESSION_STORAGE_KEY);
-=======
-    const raw = window.localStorage.getItem(LOCAL_SESSION_STORAGE_KEY);
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
     if (!raw) return null;
     return JSON.parse(raw) as AuthProfile;
   } catch (error) {
@@ -445,6 +429,7 @@ export default function AppWrapper() {
 function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole>('AGENT');
   const [authProfile, setAuthProfile] = useState<AuthProfile | null>(null);
@@ -459,7 +444,6 @@ function App() {
     max_loan_duration: 12,
     penalty_rate: 5,
     currency: 'MWK',
-<<<<<<< HEAD
     company_name: 'GiantFluid Ltd'
   });
   const [users, setUsers] = useState<any[]>([]);
@@ -497,16 +481,6 @@ function App() {
     }
     return () => clearInterval(timer);
   }, [forgotOtpTimer]);
-
-=======
-    company_name: 'FastKwacha Ltd'
-  });
-  const [users, setUsers] = useState<any[]>([]);
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
-  const [pendingEmailPrompt, setPendingEmailPrompt] = useState<string | null>(null);
-  const [loginAttempts, setLoginAttempts] = useState({ count: 0, lockedUntil: 0 });
-
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -528,15 +502,9 @@ function App() {
   const isPendingAgent = sessionProfile?.role === 'AGENT' && sessionProfile.status === 'PENDING';
 
   const predefinedRoleAccounts: Record<string, { role: UserRole; password: string; name: string }> = {
-<<<<<<< HEAD
     'admin@giantfluid.com': { role: 'ADMIN', password: 'admin123', name: 'System Admin' },
     'officer@giantfluid.com': { role: 'OFFICER', password: 'officer123', name: 'Loan Officer' },
     'auditor@giantfluid.com': { role: 'AUDITOR', password: 'auditor123', name: 'Compliance Auditor' },
-=======
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
-    'admin@fastkwacha.com': { role: 'ADMIN', password: 'admin123', name: 'System Admin' },
-    'officer@fastkwacha.com': { role: 'OFFICER', password: 'officer123', name: 'Loan Officer' },
-    'auditor@fastkwacha.com': { role: 'AUDITOR', password: 'auditor123', name: 'Compliance Auditor' },
   };
 
   const fetchUserProfileByEmail = async (emailAddress: string) => {
@@ -684,12 +652,7 @@ function App() {
         setSystemSettings(docSnap.data() as SystemSettings);
       } else {
         setDoc(doc(db, 'system_settings', 'global'), {
-          interest_rate_default: 15, max_loan_duration: 12, penalty_rate: 5,
-<<<<<<< HEAD
           currency: 'MWK', company_name: 'GiantFluid Ltd'
-=======
-          currency: 'MWK', company_name: 'FastKwacha Ltd'
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
         }).catch(console.error);
       }
     });
@@ -880,68 +843,35 @@ function App() {
     }
   };
 
-<<<<<<< HEAD
   const handleInitiateAgentRegistration = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (isRegisteringAgent) return;
 
-=======
-  const handleAgentRegistration = async (e?: React.FormEvent | React.MouseEvent) => {
-    e?.preventDefault();
-    if (isRegisteringAgent) return;
-    setIsRegisteringAgent(true);
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
     const normalizedEmail = normalizeEmail(registrationData.email);
 
     if (!registrationData.fullName || !normalizedEmail || !registrationData.phone || !registrationData.nationalId || !registrationData.address || !registrationData.password || !registrationData.confirmPassword) {
       toast.error('Complete all required registration fields.');
-<<<<<<< HEAD
-=======
-      setIsRegisteringAgent(false);
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       return;
     }
     if (!PASSWORD_RULE.test(registrationData.password)) {
       toast.error('Password must be at least 8 characters and include letters and numbers.');
-<<<<<<< HEAD
-=======
-      setIsRegisteringAgent(false);
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       return;
     }
     if (registrationData.password !== registrationData.confirmPassword) {
       toast.error('Passwords do not match.');
-<<<<<<< HEAD
       return;
     }
     if (!PHONE_REGEX.test(formatPhoneDisplay(registrationData.phone))) {
       toast.error('Enter a valid phone number.');
-=======
-      setIsRegisteringAgent(false);
-      return;
-    }
-    if (!PHONE_REGEX.test(formatPhoneDisplay(registrationData.phone))) {
-      toast.error('Enter a valid Malawi phone number.');
-      setIsRegisteringAgent(false);
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       return;
     }
     if (!ID_NUMBER_REGEX.test(registrationData.nationalId.trim().toUpperCase())) {
       toast.error('Enter a valid National ID number.');
-<<<<<<< HEAD
       return;
     }
 
     try {
       setIsRegisteringAgent(true);
-=======
-      setIsRegisteringAgent(false);
-      return;
-    }
-
-    console.log('Registration started for email:', normalizedEmail);
-    try {
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       const existingEmail = await fetchUserProfileByEmail(normalizedEmail);
       if (existingEmail) {
         toast.error('Email already registered.');
@@ -955,18 +885,8 @@ function App() {
         const duplicateIdSnap = await getDocs(duplicateIdQuery);
         isDuplicateId = !duplicateIdSnap.empty;
       } catch (err: any) {
-<<<<<<< HEAD
         const locals = getLocalUsers();
         isDuplicateId = locals.some(u => u.nationalId?.trim().toUpperCase() === registrationData.nationalId.trim().toUpperCase());
-=======
-        if (err.code === 'permission-denied' || err.message?.includes('permission')) {
-          console.warn('Duplicate ID check blocked by permissions. Checking local storage.');
-          const locals = getLocalUsers();
-          isDuplicateId = locals.some(u => u.nationalId?.trim().toUpperCase() === registrationData.nationalId.trim().toUpperCase());
-        } else {
-          throw err;
-        }
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       }
 
       if (isDuplicateId) {
@@ -974,7 +894,6 @@ function App() {
         setIsRegisteringAgent(false);
         return;
       }
-<<<<<<< HEAD
 
       const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
       setRegOtpCode(generatedOtp);
@@ -1028,9 +947,6 @@ function App() {
 
     console.log('Registration submitted for email:', normalizedEmail);
     try {
-=======
- 
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       const generatedId = `demo-${Math.random().toString(36).substr(2, 9)}`;
       const payload = {
         id: generatedId,
@@ -1084,25 +1000,18 @@ function App() {
       setRole('AGENT');
       setCurrentView('dashboard');
       setShowRegistrationSuccessPanel(true);
-<<<<<<< HEAD
       setRegistrationStep('details');
       setRegOtpCode('');
       setRegEnteredOtp('');
       toast.success('Registration submitted successfully.');
     } catch (error: any) {
       console.error('Agent registration failed:', error);
-=======
-      toast.success('Registration submitted. Simulation Mode enabled.');
-    } catch (error: any) {
-      console.error('Agent registration failed - FULL ERROR:', error);
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       toast.error(`Registration Failed: ${error.message || 'Unknown error'}`);
     } finally {
       setIsRegisteringAgent(false);
     }
   };
 
-<<<<<<< HEAD
   const handleSendForgotPasswordOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const normalized = normalizeEmail(forgotEmail);
@@ -1202,9 +1111,6 @@ function App() {
     toast.success(`New OTP sent to ${normalizeEmail(forgotEmail)}`);
     toast.info(`[GiantFluid Email] Your new password reset OTP is: ${newOtp}`, { duration: 15000 });
   };
-
-=======
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
   const handleLogout = async () => {
     try {
       if (localSessionProfile && !user) {
@@ -1246,82 +1152,95 @@ function App() {
 
   if (!user && !localSessionProfile) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-[#f8fafc] p-6">
-        <Card className="max-w-md w-full border-none shadow-2xl overflow-hidden">
-          <div className="bg-brand-600 p-8 text-white text-center">
-            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-              <LayoutDashboard size={32} />
+      <div className="min-h-screen w-full flex flex-col md:flex-row bg-[#0f172a]">
+        {/* Left panel — branding (hidden on small screens) */}
+        <div className="hidden md:flex flex-col justify-between p-12 bg-gradient-to-br from-brand-700 via-brand-600 to-brand-500 w-[420px] shrink-0 relative overflow-hidden">
+          {/* Background glow circles */}
+          <div className="absolute -top-24 -left-24 w-72 h-72 bg-white/5 rounded-full blur-3xl" />
+          <div className="absolute bottom-0 right-0 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
+          
+          <div className="relative z-10">
+            <div className="flex items-center gap-3 mb-12">
+              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/20">
+                <LayoutDashboard size={20} className="text-white" />
+              </div>
+              <span className="font-extrabold text-xl text-white tracking-tight">GIANTFLUID</span>
             </div>
-<<<<<<< HEAD
-            <h1 className="text-2xl font-bold">GiantFluid</h1>
-=======
-            <h1 className="text-2xl font-bold">FastKwacha</h1>
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
-            <p className="text-brand-100 text-sm mt-2">Secure Loan Management Infrastructure</p>
+            <h2 className="text-3xl font-black text-white leading-tight mb-4">
+              Secure Loan<br />Management<br />Infrastructure
+            </h2>
+            <p className="text-brand-100 text-sm leading-relaxed">
+              Enterprise-grade financial operations platform for credit institutions, field agents, and compliance teams.
+            </p>
           </div>
-          <CardContent className="p-8 space-y-6">
-            <div className="space-y-2 text-center">
-<<<<<<< HEAD
-              <h2 className="text-xl font-bold text-slate-900">
-                {authMode === 'login' && 'System Authentication'}
-                {authMode === 'register' && (registrationStep === 'details' ? 'Agent Registration' : 'Verify Email OTP')}
-                {authMode === 'forgot-password' && (forgotStep === 'request' ? 'Reset Password' : 'Verify OTP & Set New Password')}
-              </h2>
-              <p className="text-slate-500 text-sm">
-                {authMode === 'login' && 'Access the financial core using your authorized account.'}
-                {authMode === 'register' && (registrationStep === 'details' ? 'Create an agent account for admin review and approval.' : `Enter the 6-digit OTP code sent to ${registrationData.email}`)}
-                {authMode === 'forgot-password' && (forgotStep === 'request' ? 'Enter your registered email address to receive a verification OTP code.' : `Enter the 6-digit OTP code sent to ${forgotEmail}`)}
-=======
-              <h2 className="text-xl font-bold text-slate-900">{authMode === 'login' ? 'System Authentication' : 'Agent Registration'}</h2>
-              <p className="text-slate-500 text-sm">
-                {authMode === 'login'
-                  ? 'Access the financial core using your authorized account.'
-                  : 'Create an agent account for admin review and approval.'}
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
+
+          <div className="relative z-10 space-y-3">
+            {[
+              { label: 'Bank-grade Encryption', icon: '🔒' },
+              { label: 'Real-time OTP Verification', icon: '📲' },
+              { label: 'Multi-role Access Control', icon: '🛡️' },
+            ].map((feat) => (
+              <div key={feat.label} className="flex items-center gap-3 text-sm text-white/80 font-medium">
+                <span className="text-base">{feat.icon}</span>
+                {feat.label}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Right panel — form */}
+        <div className="flex-1 flex flex-col items-center justify-center p-4 sm:p-8 overflow-y-auto">
+          {/* Mobile header */}
+          <div className="md:hidden flex items-center gap-2 mb-8 self-start">
+            <div className="w-9 h-9 bg-brand-500 rounded-xl flex items-center justify-center">
+              <LayoutDashboard size={18} className="text-white" />
+            </div>
+            <span className="font-extrabold text-xl text-white tracking-tight">GIANTFLUID</span>
+          </div>
+
+          <div className="w-full max-w-sm">
+            {/* Title */}
+            <div className="mb-8">
+              <h1 className="text-2xl font-black text-white mb-2">
+                {authMode === 'login' && 'Welcome Back'}
+                {authMode === 'register' && (registrationStep === 'details' ? 'Agent Registration' : 'Verify Your Email')}
+                {authMode === 'forgot-password' && (forgotStep === 'request' ? 'Forgot Password' : 'Reset Password')}
+              </h1>
+              <p className="text-slate-400 text-sm">
+                {authMode === 'login' && 'Sign in with your authorized credentials.'}
+                {authMode === 'register' && (registrationStep === 'details' ? 'Create an agent account for admin approval.' : `Enter the 6-digit OTP code sent to ${registrationData.email}`)}
+                {authMode === 'forgot-password' && (forgotStep === 'request' ? 'Enter your email to receive a password reset OTP.' : `Enter the OTP code sent to ${forgotEmail}`)}
               </p>
             </div>
 
             {loginError === 'auth/operation-not-allowed' && (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[11px] leading-relaxed">
-                <div className="flex items-center gap-2 font-bold mb-1">
+              <div className="mb-6 p-4 bg-amber-900/40 border border-amber-700/50 rounded-xl text-amber-200 text-[11px] leading-relaxed">
+                <div className="flex items-center gap-2 font-bold mb-1 text-amber-300">
                   <AlertCircle size={14} />
                   <span>ACTION REQUIRED</span>
                 </div>
-                <p>Email/Password login is disabled in your Firebase project. To fix this:</p>
-                <ol className="list-decimal ml-4 mt-1 space-y-0.5">
-                  <li>Open the <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" className="underline font-bold">Firebase Console</a></li>
-                  <li>Go to <b>Authentication</b> → <b>Sign-in method</b></li>
-                  <li>Click <b>Add new provider</b> and enable <b>Email/Password</b></li>
-                </ol>
+                <p>Email/Password login is disabled in Firebase. Enable it in <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" className="underline font-bold">Firebase Console</a> → Authentication → Sign-in method.</p>
               </div>
             )}
 
-<<<<<<< HEAD
+            {/* LOGIN FORM */}
             {authMode === 'login' && (
-=======
-            {authMode === 'login' ? (
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
               <>
                 <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Email Address</label>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Email Address</label>
                     <Input 
                       type="email" 
-<<<<<<< HEAD
                       placeholder="name@giantfluid.com" 
-=======
-                      placeholder="name@fastkwacha.com" 
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
-                      className="h-11 border-slate-200"
+                      className="h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-brand-500 focus:ring-brand-500/20 rounded-xl"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
                     />
                   </div>
-                  <div className="space-y-2">
-<<<<<<< HEAD
+                  <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Password</label>
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Password</label>
                       <button
                         type="button"
                         onClick={() => {
@@ -1329,18 +1248,15 @@ function App() {
                           setForgotStep('request');
                           setForgotEmail(email);
                         }}
-                        className="text-xs text-brand-600 font-bold hover:underline hover:text-brand-700 transition-colors"
+                        className="text-xs text-brand-400 font-bold hover:text-brand-300 transition-colors"
                       >
                         Forgot Password?
                       </button>
                     </div>
-=======
-                    <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Password</label>
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
                     <Input 
                       type="password" 
                       placeholder="••••••••" 
-                      className="h-11 border-slate-200"
+                      className="h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-brand-500 focus:ring-brand-500/20 rounded-xl"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       required
@@ -1348,29 +1264,21 @@ function App() {
                   </div>
                   <Button 
                     type="submit"
-<<<<<<< HEAD
-                    className="w-full h-11 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs"
-=======
-                    variant="ghost"
-                    className="w-full h-10 text-slate-500 font-bold text-xs hover:bg-slate-50"
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
+                    className="w-full h-12 bg-brand-600 hover:bg-brand-500 text-white font-bold text-sm rounded-xl transition-all duration-200 shadow-lg shadow-brand-900/40"
                   >
-                    Sign In with Email
+                    Sign In →
                   </Button>
                 </form>
 
                 {pendingEmailPrompt && (
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-[12px] text-blue-900 space-y-3">
-                    <p>Account not found for <span className="font-bold">{pendingEmailPrompt}</span>. Would you like to register as an Agent?</p>
+                  <div className="mt-4 rounded-xl border border-blue-700/40 bg-blue-900/30 p-4 text-[12px] text-blue-200 space-y-3">
+                    <p>Account not found for <span className="font-bold">{pendingEmailPrompt}</span>. Register as an Agent?</p>
                     <Button
                       type="button"
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold"
+                      className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl"
                       onClick={() => {
                         setRegistrationData(prev => ({ ...prev, email: pendingEmailPrompt }));
-<<<<<<< HEAD
                         setRegistrationStep('details');
-=======
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
                         setAuthMode('register');
                       }}
                     >
@@ -1378,307 +1286,216 @@ function App() {
                     </Button>
                   </div>
                 )}
-<<<<<<< HEAD
 
                 {!pendingEmailPrompt && (
-                  <Button type="button" variant="outline" className="w-full h-10 text-xs font-bold" onClick={() => { setRegistrationStep('details'); setAuthMode('register'); }}>
+                  <button 
+                    type="button" 
+                    className="w-full mt-4 h-12 rounded-xl border border-white/10 text-slate-300 text-sm font-semibold hover:bg-white/5 transition-colors"
+                    onClick={() => { setRegistrationStep('details'); setAuthMode('register'); }}
+                  >
                     New Agent? Register for Access
-                  </Button>
+                  </button>
                 )}
               </>
             )}
 
+            {/* REGISTER STEP 1: DETAILS */}
             {authMode === 'register' && registrationStep === 'details' && (
-              <form onSubmit={handleInitiateAgentRegistration} className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Full Name</label>
-                  <Input className="h-11 border-slate-200" placeholder="John Doe" value={registrationData.fullName} onChange={(e) => setRegistrationData({ ...registrationData, fullName: e.target.value })} required />
+              <form onSubmit={handleInitiateAgentRegistration} className="space-y-3">
+                <div className="grid grid-cols-1 gap-3">
+                  {[
+                    { label: 'Full Name', key: 'fullName', placeholder: 'John Banda', type: 'text' },
+                    { label: 'Email Address', key: 'email', placeholder: 'agent@giantfluid.com', type: 'email' },
+                    { label: 'Phone Number', key: 'phone', placeholder: '+265 999 123 456', type: 'text' },
+                    { label: 'National ID', key: 'nationalId', placeholder: 'AB123456', type: 'text' },
+                    { label: 'Address', key: 'address', placeholder: 'Area 3, Lilongwe', type: 'text' },
+                    { label: 'Password', key: 'password', placeholder: 'Min 8 chars (letters & numbers)', type: 'password' },
+                    { label: 'Confirm Password', key: 'confirmPassword', placeholder: 'Repeat password', type: 'password' },
+                    { label: 'Guarantor / Reference', key: 'guarantorReference', placeholder: 'Optional', type: 'text' },
+                  ].map(field => (
+                    <div key={field.key} className="space-y-1">
+                      <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">{field.label}</label>
+                      <Input 
+                        type={field.type}
+                        placeholder={field.placeholder}
+                        className="h-11 bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-brand-500 rounded-xl text-sm"
+                        value={(registrationData as any)[field.key]}
+                        onChange={(e) => setRegistrationData({ ...registrationData, [field.key]: field.key === 'nationalId' ? e.target.value.toUpperCase() : e.target.value })}
+                        required={field.key !== 'guarantorReference'}
+                      />
+                    </div>
+                  ))}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Passport Photo (Optional)</label>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      className="h-11 bg-white/5 border-white/10 text-slate-300 cursor-pointer rounded-xl text-sm"
+                      onChange={(e) => setRegistrationFiles({ profilePhoto: e.target.files?.[0] || null })}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Email Address</label>
-                  <Input type="email" placeholder="agent@giantfluid.com" className="h-11 border-slate-200" value={registrationData.email} onChange={(e) => setRegistrationData({ ...registrationData, email: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Phone Number</label>
-                  <Input className="h-11 border-slate-200" placeholder="+265 999 123 456" value={registrationData.phone} onChange={(e) => setRegistrationData({ ...registrationData, phone: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">National ID</label>
-                  <Input className="h-11 border-slate-200" placeholder="AB123456" value={registrationData.nationalId} onChange={(e) => setRegistrationData({ ...registrationData, nationalId: e.target.value.toUpperCase() })} required />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Address</label>
-                  <Input className="h-11 border-slate-200" placeholder="Area 3, Lilongwe" value={registrationData.address} onChange={(e) => setRegistrationData({ ...registrationData, address: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Password</label>
-                  <Input type="password" placeholder="Min 8 chars (letters & numbers)" className="h-11 border-slate-200" value={registrationData.password} onChange={(e) => setRegistrationData({ ...registrationData, password: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Confirm Password</label>
-                  <Input type="password" placeholder="Repeat password" className="h-11 border-slate-200" value={registrationData.confirmPassword} onChange={(e) => setRegistrationData({ ...registrationData, confirmPassword: e.target.value })} required />
-=======
-              </>
-            ) : (
-              <form onSubmit={handleAgentRegistration} className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Full Name</label>
-                  <Input className="h-11 border-slate-200" value={registrationData.fullName} onChange={(e) => setRegistrationData({ ...registrationData, fullName: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Email Address</label>
-                  <Input type="email" className="h-11 border-slate-200" value={registrationData.email} onChange={(e) => setRegistrationData({ ...registrationData, email: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Phone Number</label>
-                  <Input className="h-11 border-slate-200" value={registrationData.phone} onChange={(e) => setRegistrationData({ ...registrationData, phone: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">National ID</label>
-                  <Input className="h-11 border-slate-200" value={registrationData.nationalId} onChange={(e) => setRegistrationData({ ...registrationData, nationalId: e.target.value.toUpperCase() })} required />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Address</label>
-                  <Input className="h-11 border-slate-200" value={registrationData.address} onChange={(e) => setRegistrationData({ ...registrationData, address: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Password</label>
-                  <Input type="password" className="h-11 border-slate-200" value={registrationData.password} onChange={(e) => setRegistrationData({ ...registrationData, password: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Confirm Password</label>
-                  <Input type="password" className="h-11 border-slate-200" value={registrationData.confirmPassword} onChange={(e) => setRegistrationData({ ...registrationData, confirmPassword: e.target.value })} required />
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Passport Photo</label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    className="h-11 border-slate-200 cursor-pointer"
-                    onChange={(e) => setRegistrationFiles({ profilePhoto: e.target.files?.[0] || null })}
-                  />
-                  <p className="text-[11px] text-slate-500">{registrationFiles.profilePhoto?.name || 'Optional image file not selected.'}</p>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Guarantor / Reference</label>
-                  <Input className="h-11 border-slate-200" placeholder="Optional" value={registrationData.guarantorReference} onChange={(e) => setRegistrationData({ ...registrationData, guarantorReference: e.target.value })} />
-                </div>
-                <div className="flex gap-3">
-<<<<<<< HEAD
-                  <Button type="button" variant="outline" className="flex-1 h-11 text-xs font-bold" onClick={() => setAuthMode('login')} disabled={isRegisteringAgent}>
-=======
-                  <Button type="button" variant="outline" className="flex-1 h-10 text-xs font-bold" onClick={() => setAuthMode('login')} disabled={isRegisteringAgent}>
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
-                    Back to Login
-                  </Button>
-                  <Button
-                    type="submit"
-<<<<<<< HEAD
-                    className="flex-1 h-11 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold"
-                    disabled={isRegisteringAgent}
-                  >
-                    {isRegisteringAgent ? 'Validating...' : 'Send Registration OTP'}
-=======
-                    className="flex-1 h-10 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold"
-                    disabled={isRegisteringAgent}
-                  >
-                    {isRegisteringAgent ? 'Submitting...' : 'Submit Agent Registration'}
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
+                <div className="flex gap-3 pt-2">
+                  <button type="button" className="flex-1 h-11 rounded-xl border border-white/10 text-slate-300 text-sm font-semibold hover:bg-white/5 transition-colors" onClick={() => setAuthMode('login')} disabled={isRegisteringAgent}>Back</button>
+                  <Button type="submit" className="flex-1 h-11 bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-900/40" disabled={isRegisteringAgent}>
+                    {isRegisteringAgent ? 'Validating...' : 'Send OTP →'}
                   </Button>
                 </div>
               </form>
             )}
 
-<<<<<<< HEAD
+            {/* REGISTER STEP 2: OTP VERIFY */}
             {authMode === 'register' && registrationStep === 'otp_verify' && (
               <form onSubmit={handleVerifyRegistrationOtp} className="space-y-5">
-                <div className="p-4 rounded-xl border border-blue-200 bg-blue-50 text-blue-900 space-y-2 text-center">
-                  <p className="text-xs font-semibold">
-                    We sent a 6-digit verification OTP code to:
-                  </p>
-                  <p className="text-sm font-bold text-blue-700">{registrationData.email}</p>
+                <div className="p-5 rounded-2xl border border-brand-500/30 bg-brand-900/30 text-center space-y-2">
+                  <p className="text-sm text-slate-300 font-semibold">Verification code sent to:</p>
+                  <p className="text-base font-black text-brand-300">{registrationData.email}</p>
                   {regOtpCode && (
-                    <div className="mt-2 pt-2 border-t border-blue-200 text-[11px] text-blue-800 font-mono bg-white/70 py-1.5 rounded-lg border">
-                      🔑 Demo OTP Code: <span className="font-extrabold tracking-wider text-blue-900 text-xs">{regOtpCode}</span>
+                    <div className="mt-3 pt-3 border-t border-brand-500/20 text-xs text-slate-400 font-mono">
+                      🔑 Demo OTP: <span className="font-extrabold text-white tracking-widest text-sm">{regOtpCode}</span>
                     </div>
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Enter 6-Digit OTP</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Enter 6-Digit OTP</label>
                   <Input 
                     type="text" 
                     maxLength={6}
                     placeholder="123456" 
-                    className="h-12 border-slate-300 text-center font-mono text-xl font-bold tracking-widest"
+                    className="h-14 bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-brand-500 rounded-xl text-center font-mono text-2xl font-black tracking-widest"
                     value={regEnteredOtp}
                     onChange={(e) => setRegEnteredOtp(e.target.value.replace(/\D/g, ''))}
                     required
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <span className="text-slate-500 font-medium">Didn't receive the code?</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">Didn't receive the code?</span>
                   <button
                     type="button"
                     onClick={handleResendRegistrationOtp}
                     disabled={regOtpTimer > 0}
-                    className={`font-bold ${regOtpTimer > 0 ? 'text-slate-400 cursor-not-allowed' : 'text-brand-600 hover:underline'}`}
+                    className={`font-bold ${regOtpTimer > 0 ? 'text-slate-600 cursor-not-allowed' : 'text-brand-400 hover:text-brand-300'}`}
                   >
                     {regOtpTimer > 0 ? `Resend in ${regOtpTimer}s` : 'Resend Code'}
                   </button>
                 </div>
 
-                <div className="flex gap-3 pt-2">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    className="flex-1 h-11 text-xs font-bold" 
-                    onClick={() => setRegistrationStep('details')}
-                  >
-                    Edit Details
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="flex-1 h-11 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold"
-                  >
-                    Verify OTP & Register
+                <div className="flex gap-3">
+                  <button type="button" className="flex-1 h-12 rounded-xl border border-white/10 text-slate-300 text-sm font-semibold hover:bg-white/5 transition-colors" onClick={() => setRegistrationStep('details')}>← Edit Details</button>
+                  <Button type="submit" className="flex-1 h-12 bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-900/40">
+                    Verify & Register
                   </Button>
                 </div>
               </form>
             )}
 
+            {/* FORGOT PASSWORD: REQUEST */}
             {authMode === 'forgot-password' && forgotStep === 'request' && (
               <form onSubmit={handleSendForgotPasswordOtp} className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Registered Email Address</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Registered Email Address</label>
                   <Input 
                     type="email" 
                     placeholder="name@giantfluid.com" 
-                    className="h-11 border-slate-200"
+                    className="h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-brand-500 rounded-xl"
                     value={forgotEmail}
                     onChange={(e) => setForgotEmail(e.target.value)}
                     required
                   />
                 </div>
-                <div className="flex gap-3 pt-2">
-                  <Button type="button" variant="outline" className="flex-1 h-11 text-xs font-bold" onClick={() => setAuthMode('login')}>
-                    Back to Sign In
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="flex-1 h-11 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold"
-                  >
-                    Send OTP Code
+                <div className="flex gap-3 pt-1">
+                  <button type="button" className="flex-1 h-12 rounded-xl border border-white/10 text-slate-300 text-sm font-semibold hover:bg-white/5 transition-colors" onClick={() => setAuthMode('login')}>← Back</button>
+                  <Button type="submit" className="flex-1 h-12 bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-900/40">
+                    Send OTP →
                   </Button>
                 </div>
               </form>
             )}
 
+            {/* FORGOT PASSWORD: VERIFY & RESET */}
             {authMode === 'forgot-password' && forgotStep === 'verify' && (
               <form onSubmit={handleResetPasswordWithOtp} className="space-y-4">
-                <div className="p-4 rounded-xl border border-blue-200 bg-blue-50 text-blue-900 space-y-2 text-center">
-                  <p className="text-xs font-semibold">
-                    We sent a password reset OTP code to:
-                  </p>
-                  <p className="text-sm font-bold text-blue-700">{forgotEmail}</p>
+                <div className="p-5 rounded-2xl border border-brand-500/30 bg-brand-900/30 text-center space-y-2">
+                  <p className="text-sm text-slate-300 font-semibold">Reset OTP sent to:</p>
+                  <p className="text-base font-black text-brand-300">{forgotEmail}</p>
                   {forgotOtpCode && (
-                    <div className="mt-2 pt-2 border-t border-blue-200 text-[11px] text-blue-800 font-mono bg-white/70 py-1.5 rounded-lg border">
-                      🔑 Reset OTP Code: <span className="font-extrabold tracking-wider text-blue-900 text-xs">{forgotOtpCode}</span>
+                    <div className="mt-3 pt-3 border-t border-brand-500/20 text-xs text-slate-400 font-mono">
+                      🔑 Demo OTP: <span className="font-extrabold text-white tracking-widest text-sm">{forgotOtpCode}</span>
                     </div>
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">6-Digit OTP Code</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">6-Digit OTP Code</label>
                   <Input 
                     type="text" 
                     maxLength={6}
                     placeholder="123456" 
-                    className="h-12 border-slate-300 text-center font-mono text-xl font-bold tracking-widest"
+                    className="h-14 bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-brand-500 rounded-xl text-center font-mono text-2xl font-black tracking-widest"
                     value={forgotEnteredOtp}
                     onChange={(e) => setForgotEnteredOtp(e.target.value.replace(/\D/g, ''))}
                     required
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">New Password</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">New Password</label>
                   <Input 
                     type="password" 
                     placeholder="Min 8 chars (letters & numbers)" 
-                    className="h-11 border-slate-200"
+                    className="h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-brand-500 rounded-xl"
                     value={forgotNewPassword}
                     onChange={(e) => setForgotNewPassword(e.target.value)}
                     required
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Confirm New Password</label>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Confirm New Password</label>
                   <Input 
                     type="password" 
                     placeholder="Repeat new password" 
-                    className="h-11 border-slate-200"
+                    className="h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-brand-500 rounded-xl"
                     value={forgotConfirmPassword}
                     onChange={(e) => setForgotConfirmPassword(e.target.value)}
                     required
                   />
                 </div>
 
-                <div className="flex items-center justify-between text-xs pt-1">
-                  <span className="text-slate-500 font-medium">Didn't receive code?</span>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-slate-500">Didn't receive code?</span>
                   <button
                     type="button"
                     onClick={handleResendForgotOtp}
                     disabled={forgotOtpTimer > 0}
-                    className={`font-bold ${forgotOtpTimer > 0 ? 'text-slate-400 cursor-not-allowed' : 'text-brand-600 hover:underline'}`}
+                    className={`font-bold ${forgotOtpTimer > 0 ? 'text-slate-600 cursor-not-allowed' : 'text-brand-400 hover:text-brand-300'}`}
                   >
                     {forgotOtpTimer > 0 ? `Resend in ${forgotOtpTimer}s` : 'Resend Code'}
                   </button>
                 </div>
 
-                <div className="flex gap-3 pt-2">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    className="flex-1 h-11 text-xs font-bold" 
-                    onClick={() => setForgotStep('request')}
-                  >
-                    Back
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="flex-1 h-11 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold"
-                  >
+                <div className="flex gap-3">
+                  <button type="button" className="flex-1 h-12 rounded-xl border border-white/10 text-slate-300 text-sm font-semibold hover:bg-white/5 transition-colors" onClick={() => setForgotStep('request')}>← Back</button>
+                  <Button type="submit" className="flex-1 h-12 bg-brand-600 hover:bg-brand-500 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-900/40">
                     Reset & Sign In
                   </Button>
                 </div>
               </form>
-=======
-            {authMode === 'login' && !pendingEmailPrompt && (
-              <Button type="button" variant="outline" className="w-full h-10 text-xs font-bold" onClick={() => setAuthMode('register')}>
-                New Agent? Register for Access
-              </Button>
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
             )}
 
-            <div className="pt-4 border-t border-slate-100 text-center">
-              <p className="text-[10px] text-slate-400 leading-relaxed italic">
-                Authorized Stakeholder Access Only. All sessions are monitored and encrypted.
+            <div className="mt-8 pt-6 border-t border-white/5 text-center">
+              <p className="text-[11px] text-slate-600">
+                🔒 Authorized Stakeholder Access Only. Sessions are encrypted and monitored.
               </p>
             </div>
-
-            <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest font-black justify-center pt-2">
-              <CheckCircle2 size={12} />
-              Encrypted Session
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
+
 
   if (sessionProfile && sessionProfile.status !== 'ACTIVE' && !isPendingAgent) {
     return (
@@ -1689,231 +1506,291 @@ function App() {
     );
   }
 
-  return (
-    <div className="flex h-screen bg-background font-sans text-foreground">
+
+  const renderNavItems = (isMobile = false) => (
+    <nav className="flex-1 space-y-1 mt-2">
+      <NavItem 
+        icon={<LayoutDashboard size={16} />} 
+        label="Dashboard" 
+        active={currentView === 'dashboard'} 
+        onClick={() => { setCurrentView('dashboard'); if (isMobile) setIsMobileMenuOpen(false); }}
+        collapsed={!isMobile && !isSidebarOpen}
+      />
       
-      {/* Sidebar */}
-      <aside className={`bg-sidebar border-r border-sidebar-border transition-all duration-300 flex flex-col ${isSidebarOpen ? 'w-[200px]' : 'w-20'}`}>
+      {role === 'ADMIN' && (
+        <>
+          <NavItem 
+            icon={<Users size={16} />} 
+            label="Users" 
+            active={currentView === 'users'} 
+            onClick={() => { setCurrentView('users'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<UserPlus size={16} />} 
+            label="Clients" 
+            active={currentView === 'clients'} 
+            onClick={() => { setCurrentView('clients'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<Briefcase size={16} />} 
+            label="Loan Products" 
+            active={currentView === 'loan-products'} 
+            onClick={() => { setCurrentView('loan-products'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<FileText size={16} />} 
+            label="Loans" 
+            active={currentView === 'loans'} 
+            onClick={() => { setCurrentView('loans'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<History size={16} />} 
+            label="Transactions" 
+            active={currentView === 'transactions'} 
+            onClick={() => { setCurrentView('transactions'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<BarChart3 size={16} />} 
+            label="Reports" 
+            active={currentView === 'reports'} 
+            onClick={() => { setCurrentView('reports'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<ShieldAlert size={16} />} 
+            label="Audit Logs" 
+            active={currentView === 'audit-logs'} 
+            onClick={() => { setCurrentView('audit-logs'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+        </>
+      )}
+
+      {role === 'OFFICER' && (
+        <>
+          <NavItem 
+            icon={<Users size={16} />} 
+            label="Clients" 
+            active={currentView === 'clients'} 
+            onClick={() => { setCurrentView('clients'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<FileText size={16} />} 
+            label="Applications" 
+            active={currentView === 'applications'} 
+            onClick={() => { setCurrentView('applications'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<CheckCircle2 size={16} />} 
+            label="Approvals" 
+            active={currentView === 'approvals'} 
+            onClick={() => { setCurrentView('approvals'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<CreditCard size={16} />} 
+            label="Repayments" 
+            active={currentView === 'repayments'} 
+            onClick={() => { setCurrentView('repayments'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<DollarSign size={16} />} 
+            label="Loans" 
+            active={currentView === 'loans'} 
+            onClick={() => { setCurrentView('loans'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<BarChart3 size={16} />} 
+            label="Reports" 
+            active={currentView === 'reports'} 
+            onClick={() => { setCurrentView('reports'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+        </>
+      )}
+
+      {role === 'AUDITOR' && (
+        <>
+          <NavItem 
+            icon={<ShieldAlert size={16} />} 
+            label="Audit Logs" 
+            active={currentView === 'audit-logs'} 
+            onClick={() => { setCurrentView('audit-logs'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<History size={16} />} 
+            label="Transactions Audit" 
+            active={currentView === 'transactions-audit'} 
+            onClick={() => { setCurrentView('transactions-audit'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<AlertCircle size={16} />} 
+            label="Anomalies" 
+            active={currentView === 'anomalies'} 
+            onClick={() => { setCurrentView('anomalies'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<BarChart3 size={16} />} 
+            label="Reports" 
+            active={currentView === 'reports'} 
+            onClick={() => { setCurrentView('reports'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<Users size={16} />} 
+            label="User Activity" 
+            active={currentView === 'user-activity'} 
+            onClick={() => { setCurrentView('user-activity'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<Briefcase size={16} />} 
+            label="Cases" 
+            active={currentView === 'cases'} 
+            onClick={() => { setCurrentView('cases'); if (isMobile) setIsMobileMenuOpen(false); }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+        </>
+      )}
+
+      {role === 'AGENT' && (
+        <>
+          <NavItem 
+            icon={<UserPlus size={16} />} 
+            label="Clients" 
+            active={currentView === 'clients'} 
+            onClick={() => { if (!isPendingAgent) { setCurrentView('clients'); if (isMobile) setIsMobileMenuOpen(false); } }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<FileText size={16} />} 
+            label="Applications" 
+            active={currentView === 'applications'} 
+            onClick={() => { if (!isPendingAgent) { setCurrentView('applications'); if (isMobile) setIsMobileMenuOpen(false); } }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<DollarSign size={16} />} 
+            label="Payments" 
+            active={currentView === 'payments'} 
+            onClick={() => { if (!isPendingAgent) { setCurrentView('payments'); if (isMobile) setIsMobileMenuOpen(false); } }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<History size={16} />} 
+            label="Transactions" 
+            active={currentView === 'transactions'} 
+            onClick={() => { if (!isPendingAgent) { setCurrentView('transactions'); if (isMobile) setIsMobileMenuOpen(false); } }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+          <NavItem 
+            icon={<Clock size={16} />} 
+            label="Due Loans" 
+            active={currentView === 'due-loans'} 
+            onClick={() => { if (!isPendingAgent) { setCurrentView('due-loans'); if (isMobile) setIsMobileMenuOpen(false); } }}
+            collapsed={!isMobile && !isSidebarOpen}
+          />
+        </>
+      )}
+
+      <NavItem 
+        icon={<Settings size={16} />} 
+        label="Settings" 
+        active={currentView === 'settings'} 
+        onClick={() => { setCurrentView('settings'); if (isMobile) setIsMobileMenuOpen(false); }}
+        collapsed={!isMobile && !isSidebarOpen}
+      />
+    </nav>
+  );
+
+  return (
+    <div className="flex h-screen bg-background font-sans text-foreground overflow-hidden">
+      
+      {/* Mobile Drawer Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 md:hidden"
+            />
+            <motion.aside
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 250 }}
+              className="fixed inset-y-0 left-0 w-72 bg-sidebar z-50 flex flex-col p-5 shadow-2xl md:hidden overflow-y-auto"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-sidebar-border/50">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-brand-500 rounded flex items-center justify-center text-white shrink-0">
+                    <LayoutDashboard size={18} />
+                  </div>
+                  <h1 className="font-extrabold text-lg leading-tight text-white tracking-tighter">GIANTFLUID</h1>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-1.5 rounded-lg text-sidebar-foreground hover:text-white hover:bg-sidebar-accent transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {renderNavItems(true)}
+
+              <div className="pt-4 mt-auto border-t border-sidebar-border/50 space-y-3">
+                <div className="px-2 space-y-1">
+                  <p className="text-[10px] text-sidebar-foreground uppercase tracking-widest font-black">Active Session</p>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${role === 'ADMIN' ? 'bg-brand-400' : role === 'OFFICER' ? 'bg-amber-400' : role === 'AGENT' ? 'bg-emerald-400' : 'bg-blue-400'}`} />
+                    <p className="text-[11px] text-white font-bold">{role} AUTHORITY</p>
+                  </div>
+                  <p className="text-[11px] text-sidebar-foreground font-medium truncate">{sessionProfile?.email || user?.email || 'local-session@giantfluid.com'}</p>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }}
+                  className="w-full justify-start gap-3 text-sidebar-foreground hover:text-white hover:bg-sidebar-accent h-10 px-2 text-xs font-semibold"
+                >
+                  <LogOut size={16} />
+                  <span>Logout</span>
+                </Button>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Desktop Sidebar */}
+      <aside className={`hidden md:flex bg-sidebar border-r border-sidebar-border transition-all duration-300 flex-col ${isSidebarOpen ? 'w-[200px]' : 'w-20'}`}>
         <div className="p-6 flex items-center gap-2">
           <div className="w-8 h-8 bg-brand-500 rounded flex items-center justify-center text-white shrink-0">
             <LayoutDashboard size={18} />
           </div>
           {isSidebarOpen && (
             <div className="overflow-hidden whitespace-nowrap">
-<<<<<<< HEAD
               <h1 className="font-extrabold text-lg leading-tight text-white tracking-tighter">GIANTFLUID</h1>
-=======
-              <h1 className="font-extrabold text-lg leading-tight text-white tracking-tighter">FASTKWACHA</h1>
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
             </div>
           )}
         </div>
 
-        <nav className="flex-1 space-y-0.5 mt-4">
-          <NavItem 
-            icon={<LayoutDashboard size={16} />} 
-            label="Dashboard" 
-            active={currentView === 'dashboard'} 
-            onClick={() => setCurrentView('dashboard')}
-            collapsed={!isSidebarOpen}
-          />
-          
-          {role === 'ADMIN' && (
-            <>
-              <NavItem 
-                icon={<Users size={16} />} 
-                label="Users" 
-                active={currentView === 'users'} 
-                onClick={() => setCurrentView('users')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<UserPlus size={16} />} 
-                label="Clients" 
-                active={currentView === 'clients'} 
-                onClick={() => setCurrentView('clients')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<Briefcase size={16} />} 
-                label="Loan Products" 
-                active={currentView === 'loan-products'} 
-                onClick={() => setCurrentView('loan-products')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<FileText size={16} />} 
-                label="Loans" 
-                active={currentView === 'loans'} 
-                onClick={() => setCurrentView('loans')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<History size={16} />} 
-                label="Transactions" 
-                active={currentView === 'transactions'} 
-                onClick={() => setCurrentView('transactions')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<BarChart3 size={16} />} 
-                label="Reports" 
-                active={currentView === 'reports'} 
-                onClick={() => setCurrentView('reports')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<ShieldAlert size={16} />} 
-                label="Audit Logs" 
-                active={currentView === 'audit-logs'} 
-                onClick={() => setCurrentView('audit-logs')}
-                collapsed={!isSidebarOpen}
-              />
-            </>
-          )}
-
-          {role === 'OFFICER' && (
-            <>
-              <NavItem 
-                icon={<Users size={16} />} 
-                label="Clients" 
-                active={currentView === 'clients'} 
-                onClick={() => setCurrentView('clients')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<FileText size={16} />} 
-                label="Applications" 
-                active={currentView === 'applications'} 
-                onClick={() => setCurrentView('applications')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<CheckCircle2 size={16} />} 
-                label="Approvals" 
-                active={currentView === 'approvals'} 
-                onClick={() => setCurrentView('approvals')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<CreditCard size={16} />} 
-                label="Repayments" 
-                active={currentView === 'repayments'} 
-                onClick={() => setCurrentView('repayments')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<DollarSign size={16} />} 
-                label="Loans" 
-                active={currentView === 'loans'} 
-                onClick={() => setCurrentView('loans')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<BarChart3 size={16} />} 
-                label="Reports" 
-                active={currentView === 'reports'} 
-                onClick={() => setCurrentView('reports')}
-                collapsed={!isSidebarOpen}
-              />
-            </>
-          )}
-
-          {role === 'AUDITOR' && (
-            <>
-              <NavItem 
-                icon={<ShieldAlert size={16} />} 
-                label="Audit Logs" 
-                active={currentView === 'audit-logs'} 
-                onClick={() => setCurrentView('audit-logs')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<History size={16} />} 
-                label="Transactions Audit" 
-                active={currentView === 'transactions-audit'} 
-                onClick={() => setCurrentView('transactions-audit')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<AlertCircle size={16} />} 
-                label="Anomalies" 
-                active={currentView === 'anomalies'} 
-                onClick={() => setCurrentView('anomalies')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<BarChart3 size={16} />} 
-                label="Reports" 
-                active={currentView === 'reports'} 
-                onClick={() => setCurrentView('reports')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<Users size={16} />} 
-                label="User Activity" 
-                active={currentView === 'user-activity'} 
-                onClick={() => setCurrentView('user-activity')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<Briefcase size={16} />} 
-                label="Cases" 
-                active={currentView === 'cases'} 
-                onClick={() => setCurrentView('cases')}
-                collapsed={!isSidebarOpen}
-              />
-            </>
-          )}
-
-          {role === 'AGENT' && (
-            <>
-              <NavItem 
-                icon={<UserPlus size={16} />} 
-                label="Clients" 
-                active={currentView === 'clients'} 
-                onClick={() => !isPendingAgent && setCurrentView('clients')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<FileText size={16} />} 
-                label="Applications" 
-                active={currentView === 'applications'} 
-                onClick={() => !isPendingAgent && setCurrentView('applications')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<DollarSign size={16} />} 
-                label="Payments" 
-                active={currentView === 'payments'} 
-                onClick={() => !isPendingAgent && setCurrentView('payments')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<History size={16} />} 
-                label="Transactions" 
-                active={currentView === 'transactions'} 
-                onClick={() => !isPendingAgent && setCurrentView('transactions')}
-                collapsed={!isSidebarOpen}
-              />
-              <NavItem 
-                icon={<Clock size={16} />} 
-                label="Due Loans" 
-                active={currentView === 'due-loans'} 
-                onClick={() => !isPendingAgent && setCurrentView('due-loans')}
-                collapsed={!isSidebarOpen}
-              />
-            </>
-          )}
-
-          <NavItem 
-            icon={<Settings size={16} />} 
-            label="Settings" 
-            active={currentView === 'settings'} 
-            onClick={() => setCurrentView('settings')}
-            collapsed={!isSidebarOpen}
-          />
-        </nav>
+        {renderNavItems(false)}
 
         <div className="p-4 mt-auto border-t border-sidebar-border/50">
           {isSidebarOpen && (
@@ -1924,11 +1801,7 @@ function App() {
                   <div className={`w-2 h-2 rounded-full ${role === 'ADMIN' ? 'bg-brand-400' : role === 'OFFICER' ? 'bg-amber-400' : role === 'AGENT' ? 'bg-emerald-400' : 'bg-blue-400'}`} />
                   <p className="text-[11px] text-white font-bold">{role} AUTHORITY</p>
                 </div>
-<<<<<<< HEAD
                 <p className="text-[12px] text-sidebar-foreground font-medium truncate mt-0.5">{sessionProfile?.email || user?.email || 'local-session@giantfluid.com'}</p>
-=======
-                <p className="text-[12px] text-sidebar-foreground font-medium truncate mt-0.5">{sessionProfile?.email || user?.email || 'local-session@fastkwacha.com'}</p>
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
               </div>
             </div>
           )}
@@ -1944,20 +1817,30 @@ function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden w-full min-w-0">
         {/* Header */}
-        <header className="h-16 bg-white border-b border-border flex items-center justify-between px-6 shrink-0">
-          <div className="flex flex-col">
-            <h1 className="text-xl font-bold tracking-tight">Institutional Dashboard</h1>
-            <p className="text-[12px] text-muted-foreground">Operational overview for Central Branch • Q3 FY24</p>
+        <header className="h-16 bg-white border-b border-border flex items-center justify-between px-4 sm:px-6 shrink-0 gap-2">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="md:hidden p-2 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors shrink-0"
+              aria-label="Open Menu"
+            >
+              <Menu size={22} />
+            </button>
+            <div className="flex flex-col">
+              <h1 className="text-base sm:text-xl font-bold tracking-tight text-slate-900 truncate">GiantFluid Core</h1>
+              <p className="text-[11px] sm:text-[12px] text-muted-foreground hidden sm:block">Operational overview for Central Branch • Q3 FY24</p>
+            </div>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
             <div className="flex gap-2">
               <Button 
                 variant="outline" 
                 size="sm" 
-                className="h-9 px-4 text-xs font-semibold border-border bg-white"
+                className="h-8 sm:h-9 px-2.5 sm:px-4 text-[11px] sm:text-xs font-semibold border-border bg-white"
                 onClick={() => {
                   let data: any[] = [];
                   let name = 'export';
@@ -1970,14 +1853,14 @@ function App() {
                   toast.success(`Exporting ${name}.csv`);
                 }}
               >
-                Export CSV
+                <FileDown size={14} className="mr-1 hidden sm:inline" /> Export
               </Button>
-              <Button size="sm" className="h-9 px-4 text-xs font-semibold bg-primary text-white" onClick={() => !isPendingAgent && setCurrentView('applications')} disabled={isPendingAgent}>
-                + New Application
+              <Button size="sm" className="h-8 sm:h-9 px-2.5 sm:px-4 text-[11px] sm:text-xs font-semibold bg-primary text-white" onClick={() => !isPendingAgent && setCurrentView('applications')} disabled={isPendingAgent}>
+                + <span className="hidden sm:inline ml-1">New Application</span><span className="sm:hidden">App</span>
               </Button>
             </div>
-            <Separator orientation="vertical" className="h-6" />
-            <div className="flex items-center gap-3">
+            <Separator orientation="vertical" className="h-6 hidden sm:block" />
+            <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8 border border-border">
                 <AvatarImage src={user?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${sessionProfile?.uid || user?.uid || role.toLowerCase()}`} />
                 <AvatarFallback>{sessionProfile?.name?.charAt(0) || user?.displayName?.charAt(0) || role.charAt(0)}</AvatarFallback>
@@ -1987,7 +1870,7 @@ function App() {
         </header>
 
         {/* View Content */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
           <AnimatePresence mode="wait">
             {currentView === 'dashboard' && (
               <motion.div key="dashboard">
@@ -3687,11 +3570,7 @@ const buildCasesFromAnomalies = (anomalies: any[]) =>
     title: anomaly.type.replace(/_/g, ' '),
     status: anomaly.status === 'UNRESOLVED' ? 'OPEN' : anomaly.status === 'INVESTIGATING' ? 'UNDER REVIEW' : 'CLOSED',
     priority: anomaly.severity === 'CRITICAL' ? 'HIGH' : anomaly.severity === 'HIGH' ? 'HIGH' : anomaly.severity === 'MEDIUM' ? 'MEDIUM' : 'LOW',
-<<<<<<< HEAD
     assignee: anomaly.user || 'auditor@giantfluid.com',
-=======
-    assignee: anomaly.user || 'auditor@fastkwacha.com',
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
     updated: anomaly.time,
     sourceId: anomaly.sourceId,
     description: anomaly.description,
@@ -3748,11 +3627,7 @@ const getIdValidationState = (idNumber: string, clients: any[]) => {
 };
 
 function ApplicationsView({ clients, applications, role }: { clients: any[], applications: any[], role: UserRole }) {
-<<<<<<< HEAD
   const draftStorageKey = `giantfluid-application-draft-${role.toLowerCase()}`;
-=======
-  const draftStorageKey = `fastkwacha-application-draft-${role.toLowerCase()}`;
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
   const [currentStep, setCurrentStep] = useState(1);
   const [draft, setDraft] = useState(emptyApplicationDraft);
   const [files, setFiles] = useState<{
@@ -7251,11 +7126,7 @@ function UserManagementView({ users, onUpdateUserStatus }: { users: any[], onUpd
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-700">Email Address</label>
                     <Input 
-<<<<<<< HEAD
-                      placeholder="email@giantfluid.com" 
-=======
-                      placeholder="email@fastkwacha.com" 
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
+                      placeholder="email@giantfluid.com"
                       className="border-border" 
                       value={formData.email}
                       onChange={e => setFormData({...formData, email: e.target.value})}
@@ -7671,11 +7542,7 @@ function CasesView({ users, applications, loans, transactions }: { users: any[],
                 title: 'Manual Investigation',
                 status: 'OPEN',
                 priority: 'MEDIUM',
-<<<<<<< HEAD
                 assignee: getActiveSessionEmail() || 'auditor@giantfluid.com',
-=======
-                assignee: getActiveSessionEmail() || 'auditor@fastkwacha.com',
->>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
                 updated: new Date().toISOString(),
                 sourceId: 'MANUAL',
                 description: 'Manually opened from the case workspace.',
