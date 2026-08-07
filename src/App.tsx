@@ -272,6 +272,7 @@ const normalizeEmail = (value: string) => value.trim().toLowerCase();
 const normalizeUserStatus = (status?: string): UserStatus =>
   status === 'INACTIVE' ? 'SUSPENDED' : ((status as UserStatus) || 'ACTIVE');
 
+<<<<<<< HEAD
 const LOCAL_USERS_KEY = 'giantfluid_local_users';
 const LEGACY_USERS_KEY = 'fastkwacha_local_users';
 const LOCAL_CLIENTS_KEY = 'giantfluid_local_clients';
@@ -282,6 +283,15 @@ const LEGACY_APPLICATIONS_KEY = 'fastkwacha_local_apps';
 const getLocalUsers = (): AuthProfile[] => {
   try {
     const data = localStorage.getItem(LOCAL_USERS_KEY) || localStorage.getItem(LEGACY_USERS_KEY);
+=======
+const LOCAL_USERS_KEY = 'fastkwacha_local_users';
+const LOCAL_CLIENTS_KEY = 'fastkwacha_local_clients';
+const LOCAL_APPLICATIONS_KEY = 'fastkwacha_local_apps';
+
+const getLocalUsers = (): AuthProfile[] => {
+  try {
+    const data = localStorage.getItem(LOCAL_USERS_KEY);
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
     return data ? JSON.parse(data) : [];
   } catch {
     return [];
@@ -343,13 +353,21 @@ const removeLocalUser = (userId: string) => {
   const users = getLocalUsers().filter(u => u.id !== userId);
   localStorage.setItem(LOCAL_USERS_KEY, JSON.stringify(users));
 };
+<<<<<<< HEAD
 const LOCAL_SESSION_STORAGE_KEY = 'giantfluid-local-session';
 const LEGACY_SESSION_STORAGE_KEY = 'fastkwacha-local-session';
+=======
+const LOCAL_SESSION_STORAGE_KEY = 'fastkwacha-local-session';
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
 
 const readStoredLocalSessionProfile = (): AuthProfile | null => {
   if (typeof window === 'undefined') return null;
   try {
+<<<<<<< HEAD
     const raw = window.localStorage.getItem(LOCAL_SESSION_STORAGE_KEY) || window.localStorage.getItem(LEGACY_SESSION_STORAGE_KEY);
+=======
+    const raw = window.localStorage.getItem(LOCAL_SESSION_STORAGE_KEY);
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
     if (!raw) return null;
     return JSON.parse(raw) as AuthProfile;
   } catch (error) {
@@ -441,6 +459,7 @@ function App() {
     max_loan_duration: 12,
     penalty_rate: 5,
     currency: 'MWK',
+<<<<<<< HEAD
     company_name: 'GiantFluid Ltd'
   });
   const [users, setUsers] = useState<any[]>([]);
@@ -479,6 +498,15 @@ function App() {
     return () => clearInterval(timer);
   }, [forgotOtpTimer]);
 
+=======
+    company_name: 'FastKwacha Ltd'
+  });
+  const [users, setUsers] = useState<any[]>([]);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [pendingEmailPrompt, setPendingEmailPrompt] = useState<string | null>(null);
+  const [loginAttempts, setLoginAttempts] = useState({ count: 0, lockedUntil: 0 });
+
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -500,9 +528,12 @@ function App() {
   const isPendingAgent = sessionProfile?.role === 'AGENT' && sessionProfile.status === 'PENDING';
 
   const predefinedRoleAccounts: Record<string, { role: UserRole; password: string; name: string }> = {
+<<<<<<< HEAD
     'admin@giantfluid.com': { role: 'ADMIN', password: 'admin123', name: 'System Admin' },
     'officer@giantfluid.com': { role: 'OFFICER', password: 'officer123', name: 'Loan Officer' },
     'auditor@giantfluid.com': { role: 'AUDITOR', password: 'auditor123', name: 'Compliance Auditor' },
+=======
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
     'admin@fastkwacha.com': { role: 'ADMIN', password: 'admin123', name: 'System Admin' },
     'officer@fastkwacha.com': { role: 'OFFICER', password: 'officer123', name: 'Loan Officer' },
     'auditor@fastkwacha.com': { role: 'AUDITOR', password: 'auditor123', name: 'Compliance Auditor' },
@@ -654,7 +685,11 @@ function App() {
       } else {
         setDoc(doc(db, 'system_settings', 'global'), {
           interest_rate_default: 15, max_loan_duration: 12, penalty_rate: 5,
+<<<<<<< HEAD
           currency: 'MWK', company_name: 'GiantFluid Ltd'
+=======
+          currency: 'MWK', company_name: 'FastKwacha Ltd'
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
         }).catch(console.error);
       }
     });
@@ -845,35 +880,68 @@ function App() {
     }
   };
 
+<<<<<<< HEAD
   const handleInitiateAgentRegistration = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (isRegisteringAgent) return;
 
+=======
+  const handleAgentRegistration = async (e?: React.FormEvent | React.MouseEvent) => {
+    e?.preventDefault();
+    if (isRegisteringAgent) return;
+    setIsRegisteringAgent(true);
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
     const normalizedEmail = normalizeEmail(registrationData.email);
 
     if (!registrationData.fullName || !normalizedEmail || !registrationData.phone || !registrationData.nationalId || !registrationData.address || !registrationData.password || !registrationData.confirmPassword) {
       toast.error('Complete all required registration fields.');
+<<<<<<< HEAD
+=======
+      setIsRegisteringAgent(false);
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       return;
     }
     if (!PASSWORD_RULE.test(registrationData.password)) {
       toast.error('Password must be at least 8 characters and include letters and numbers.');
+<<<<<<< HEAD
+=======
+      setIsRegisteringAgent(false);
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       return;
     }
     if (registrationData.password !== registrationData.confirmPassword) {
       toast.error('Passwords do not match.');
+<<<<<<< HEAD
       return;
     }
     if (!PHONE_REGEX.test(formatPhoneDisplay(registrationData.phone))) {
       toast.error('Enter a valid phone number.');
+=======
+      setIsRegisteringAgent(false);
+      return;
+    }
+    if (!PHONE_REGEX.test(formatPhoneDisplay(registrationData.phone))) {
+      toast.error('Enter a valid Malawi phone number.');
+      setIsRegisteringAgent(false);
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       return;
     }
     if (!ID_NUMBER_REGEX.test(registrationData.nationalId.trim().toUpperCase())) {
       toast.error('Enter a valid National ID number.');
+<<<<<<< HEAD
       return;
     }
 
     try {
       setIsRegisteringAgent(true);
+=======
+      setIsRegisteringAgent(false);
+      return;
+    }
+
+    console.log('Registration started for email:', normalizedEmail);
+    try {
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       const existingEmail = await fetchUserProfileByEmail(normalizedEmail);
       if (existingEmail) {
         toast.error('Email already registered.');
@@ -887,8 +955,18 @@ function App() {
         const duplicateIdSnap = await getDocs(duplicateIdQuery);
         isDuplicateId = !duplicateIdSnap.empty;
       } catch (err: any) {
+<<<<<<< HEAD
         const locals = getLocalUsers();
         isDuplicateId = locals.some(u => u.nationalId?.trim().toUpperCase() === registrationData.nationalId.trim().toUpperCase());
+=======
+        if (err.code === 'permission-denied' || err.message?.includes('permission')) {
+          console.warn('Duplicate ID check blocked by permissions. Checking local storage.');
+          const locals = getLocalUsers();
+          isDuplicateId = locals.some(u => u.nationalId?.trim().toUpperCase() === registrationData.nationalId.trim().toUpperCase());
+        } else {
+          throw err;
+        }
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       }
 
       if (isDuplicateId) {
@@ -896,6 +974,7 @@ function App() {
         setIsRegisteringAgent(false);
         return;
       }
+<<<<<<< HEAD
 
       const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
       setRegOtpCode(generatedOtp);
@@ -949,6 +1028,9 @@ function App() {
 
     console.log('Registration submitted for email:', normalizedEmail);
     try {
+=======
+ 
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       const generatedId = `demo-${Math.random().toString(36).substr(2, 9)}`;
       const payload = {
         id: generatedId,
@@ -1002,18 +1084,25 @@ function App() {
       setRole('AGENT');
       setCurrentView('dashboard');
       setShowRegistrationSuccessPanel(true);
+<<<<<<< HEAD
       setRegistrationStep('details');
       setRegOtpCode('');
       setRegEnteredOtp('');
       toast.success('Registration submitted successfully.');
     } catch (error: any) {
       console.error('Agent registration failed:', error);
+=======
+      toast.success('Registration submitted. Simulation Mode enabled.');
+    } catch (error: any) {
+      console.error('Agent registration failed - FULL ERROR:', error);
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
       toast.error(`Registration Failed: ${error.message || 'Unknown error'}`);
     } finally {
       setIsRegisteringAgent(false);
     }
   };
 
+<<<<<<< HEAD
   const handleSendForgotPasswordOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     const normalized = normalizeEmail(forgotEmail);
@@ -1114,6 +1203,8 @@ function App() {
     toast.info(`[GiantFluid Email] Your new password reset OTP is: ${newOtp}`, { duration: 15000 });
   };
 
+=======
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
   const handleLogout = async () => {
     try {
       if (localSessionProfile && !user) {
@@ -1161,11 +1252,16 @@ function App() {
             <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
               <LayoutDashboard size={32} />
             </div>
+<<<<<<< HEAD
             <h1 className="text-2xl font-bold">GiantFluid</h1>
+=======
+            <h1 className="text-2xl font-bold">FastKwacha</h1>
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
             <p className="text-brand-100 text-sm mt-2">Secure Loan Management Infrastructure</p>
           </div>
           <CardContent className="p-8 space-y-6">
             <div className="space-y-2 text-center">
+<<<<<<< HEAD
               <h2 className="text-xl font-bold text-slate-900">
                 {authMode === 'login' && 'System Authentication'}
                 {authMode === 'register' && (registrationStep === 'details' ? 'Agent Registration' : 'Verify Email OTP')}
@@ -1175,6 +1271,13 @@ function App() {
                 {authMode === 'login' && 'Access the financial core using your authorized account.'}
                 {authMode === 'register' && (registrationStep === 'details' ? 'Create an agent account for admin review and approval.' : `Enter the 6-digit OTP code sent to ${registrationData.email}`)}
                 {authMode === 'forgot-password' && (forgotStep === 'request' ? 'Enter your registered email address to receive a verification OTP code.' : `Enter the 6-digit OTP code sent to ${forgotEmail}`)}
+=======
+              <h2 className="text-xl font-bold text-slate-900">{authMode === 'login' ? 'System Authentication' : 'Agent Registration'}</h2>
+              <p className="text-slate-500 text-sm">
+                {authMode === 'login'
+                  ? 'Access the financial core using your authorized account.'
+                  : 'Create an agent account for admin review and approval.'}
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
               </p>
             </div>
 
@@ -1193,14 +1296,22 @@ function App() {
               </div>
             )}
 
+<<<<<<< HEAD
             {authMode === 'login' && (
+=======
+            {authMode === 'login' ? (
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
               <>
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Email Address</label>
                     <Input 
                       type="email" 
+<<<<<<< HEAD
                       placeholder="name@giantfluid.com" 
+=======
+                      placeholder="name@fastkwacha.com" 
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
                       className="h-11 border-slate-200"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
@@ -1208,6 +1319,7 @@ function App() {
                     />
                   </div>
                   <div className="space-y-2">
+<<<<<<< HEAD
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Password</label>
                       <button
@@ -1222,6 +1334,9 @@ function App() {
                         Forgot Password?
                       </button>
                     </div>
+=======
+                    <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Password</label>
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
                     <Input 
                       type="password" 
                       placeholder="••••••••" 
@@ -1233,7 +1348,12 @@ function App() {
                   </div>
                   <Button 
                     type="submit"
+<<<<<<< HEAD
                     className="w-full h-11 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs"
+=======
+                    variant="ghost"
+                    className="w-full h-10 text-slate-500 font-bold text-xs hover:bg-slate-50"
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
                   >
                     Sign In with Email
                   </Button>
@@ -1247,7 +1367,10 @@ function App() {
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold"
                       onClick={() => {
                         setRegistrationData(prev => ({ ...prev, email: pendingEmailPrompt }));
+<<<<<<< HEAD
                         setRegistrationStep('details');
+=======
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
                         setAuthMode('register');
                       }}
                     >
@@ -1255,6 +1378,7 @@ function App() {
                     </Button>
                   </div>
                 )}
+<<<<<<< HEAD
 
                 {!pendingEmailPrompt && (
                   <Button type="button" variant="outline" className="w-full h-10 text-xs font-bold" onClick={() => { setRegistrationStep('details'); setAuthMode('register'); }}>
@@ -1293,6 +1417,38 @@ function App() {
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Confirm Password</label>
                   <Input type="password" placeholder="Repeat password" className="h-11 border-slate-200" value={registrationData.confirmPassword} onChange={(e) => setRegistrationData({ ...registrationData, confirmPassword: e.target.value })} required />
+=======
+              </>
+            ) : (
+              <form onSubmit={handleAgentRegistration} className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Full Name</label>
+                  <Input className="h-11 border-slate-200" value={registrationData.fullName} onChange={(e) => setRegistrationData({ ...registrationData, fullName: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Email Address</label>
+                  <Input type="email" className="h-11 border-slate-200" value={registrationData.email} onChange={(e) => setRegistrationData({ ...registrationData, email: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Phone Number</label>
+                  <Input className="h-11 border-slate-200" value={registrationData.phone} onChange={(e) => setRegistrationData({ ...registrationData, phone: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">National ID</label>
+                  <Input className="h-11 border-slate-200" value={registrationData.nationalId} onChange={(e) => setRegistrationData({ ...registrationData, nationalId: e.target.value.toUpperCase() })} required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Address</label>
+                  <Input className="h-11 border-slate-200" value={registrationData.address} onChange={(e) => setRegistrationData({ ...registrationData, address: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Password</label>
+                  <Input type="password" className="h-11 border-slate-200" value={registrationData.password} onChange={(e) => setRegistrationData({ ...registrationData, password: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Confirm Password</label>
+                  <Input type="password" className="h-11 border-slate-200" value={registrationData.confirmPassword} onChange={(e) => setRegistrationData({ ...registrationData, confirmPassword: e.target.value })} required />
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
                 </div>
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-widest">Passport Photo</label>
@@ -1309,20 +1465,32 @@ function App() {
                   <Input className="h-11 border-slate-200" placeholder="Optional" value={registrationData.guarantorReference} onChange={(e) => setRegistrationData({ ...registrationData, guarantorReference: e.target.value })} />
                 </div>
                 <div className="flex gap-3">
+<<<<<<< HEAD
                   <Button type="button" variant="outline" className="flex-1 h-11 text-xs font-bold" onClick={() => setAuthMode('login')} disabled={isRegisteringAgent}>
+=======
+                  <Button type="button" variant="outline" className="flex-1 h-10 text-xs font-bold" onClick={() => setAuthMode('login')} disabled={isRegisteringAgent}>
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
                     Back to Login
                   </Button>
                   <Button
                     type="submit"
+<<<<<<< HEAD
                     className="flex-1 h-11 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold"
                     disabled={isRegisteringAgent}
                   >
                     {isRegisteringAgent ? 'Validating...' : 'Send Registration OTP'}
+=======
+                    className="flex-1 h-10 bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold"
+                    disabled={isRegisteringAgent}
+                  >
+                    {isRegisteringAgent ? 'Submitting...' : 'Submit Agent Registration'}
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
                   </Button>
                 </div>
               </form>
             )}
 
+<<<<<<< HEAD
             {authMode === 'register' && registrationStep === 'otp_verify' && (
               <form onSubmit={handleVerifyRegistrationOtp} className="space-y-5">
                 <div className="p-4 rounded-xl border border-blue-200 bg-blue-50 text-blue-900 space-y-2 text-center">
@@ -1488,6 +1656,12 @@ function App() {
                   </Button>
                 </div>
               </form>
+=======
+            {authMode === 'login' && !pendingEmailPrompt && (
+              <Button type="button" variant="outline" className="w-full h-10 text-xs font-bold" onClick={() => setAuthMode('register')}>
+                New Agent? Register for Access
+              </Button>
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
             )}
 
             <div className="pt-4 border-t border-slate-100 text-center">
@@ -1526,7 +1700,11 @@ function App() {
           </div>
           {isSidebarOpen && (
             <div className="overflow-hidden whitespace-nowrap">
+<<<<<<< HEAD
               <h1 className="font-extrabold text-lg leading-tight text-white tracking-tighter">GIANTFLUID</h1>
+=======
+              <h1 className="font-extrabold text-lg leading-tight text-white tracking-tighter">FASTKWACHA</h1>
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
             </div>
           )}
         </div>
@@ -1746,7 +1924,11 @@ function App() {
                   <div className={`w-2 h-2 rounded-full ${role === 'ADMIN' ? 'bg-brand-400' : role === 'OFFICER' ? 'bg-amber-400' : role === 'AGENT' ? 'bg-emerald-400' : 'bg-blue-400'}`} />
                   <p className="text-[11px] text-white font-bold">{role} AUTHORITY</p>
                 </div>
+<<<<<<< HEAD
                 <p className="text-[12px] text-sidebar-foreground font-medium truncate mt-0.5">{sessionProfile?.email || user?.email || 'local-session@giantfluid.com'}</p>
+=======
+                <p className="text-[12px] text-sidebar-foreground font-medium truncate mt-0.5">{sessionProfile?.email || user?.email || 'local-session@fastkwacha.com'}</p>
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
               </div>
             </div>
           )}
@@ -3505,7 +3687,11 @@ const buildCasesFromAnomalies = (anomalies: any[]) =>
     title: anomaly.type.replace(/_/g, ' '),
     status: anomaly.status === 'UNRESOLVED' ? 'OPEN' : anomaly.status === 'INVESTIGATING' ? 'UNDER REVIEW' : 'CLOSED',
     priority: anomaly.severity === 'CRITICAL' ? 'HIGH' : anomaly.severity === 'HIGH' ? 'HIGH' : anomaly.severity === 'MEDIUM' ? 'MEDIUM' : 'LOW',
+<<<<<<< HEAD
     assignee: anomaly.user || 'auditor@giantfluid.com',
+=======
+    assignee: anomaly.user || 'auditor@fastkwacha.com',
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
     updated: anomaly.time,
     sourceId: anomaly.sourceId,
     description: anomaly.description,
@@ -3562,7 +3748,11 @@ const getIdValidationState = (idNumber: string, clients: any[]) => {
 };
 
 function ApplicationsView({ clients, applications, role }: { clients: any[], applications: any[], role: UserRole }) {
+<<<<<<< HEAD
   const draftStorageKey = `giantfluid-application-draft-${role.toLowerCase()}`;
+=======
+  const draftStorageKey = `fastkwacha-application-draft-${role.toLowerCase()}`;
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
   const [currentStep, setCurrentStep] = useState(1);
   const [draft, setDraft] = useState(emptyApplicationDraft);
   const [files, setFiles] = useState<{
@@ -7061,7 +7251,11 @@ function UserManagementView({ users, onUpdateUserStatus }: { users: any[], onUpd
                   <div className="space-y-2">
                     <label className="text-xs font-bold text-slate-700">Email Address</label>
                     <Input 
+<<<<<<< HEAD
                       placeholder="email@giantfluid.com" 
+=======
+                      placeholder="email@fastkwacha.com" 
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
                       className="border-border" 
                       value={formData.email}
                       onChange={e => setFormData({...formData, email: e.target.value})}
@@ -7477,7 +7671,11 @@ function CasesView({ users, applications, loans, transactions }: { users: any[],
                 title: 'Manual Investigation',
                 status: 'OPEN',
                 priority: 'MEDIUM',
+<<<<<<< HEAD
                 assignee: getActiveSessionEmail() || 'auditor@giantfluid.com',
+=======
+                assignee: getActiveSessionEmail() || 'auditor@fastkwacha.com',
+>>>>>>> f9401857eeb97d833be214f796f4420fce2c099c
                 updated: new Date().toISOString(),
                 sourceId: 'MANUAL',
                 description: 'Manually opened from the case workspace.',
