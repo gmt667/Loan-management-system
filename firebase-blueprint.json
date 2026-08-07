@@ -1,0 +1,104 @@
+{
+  "entities": {
+    "Client": {
+      "title": "Client",
+      "description": "A person or institution participating in loan programs.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string" },
+        "status": { "type": "string", "enum": ["ACTIVE", "PENDING_KYC", "BLACKLISTED"] },
+        "kycStatus": { "type": "string", "enum": ["VERIFIED", "PENDING", "REJECTED"] },
+        "totalBalance": { "type": "number" },
+        "loanCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "status"]
+    },
+    "Loan": {
+      "title": "Loan",
+      "description": "An active or closed loan agreement.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "type": { "type": "string", "enum": ["COMMERCIAL", "SME", "PERSONAL"] },
+        "amount": { "type": "number" },
+        "interestRate": { "type": "number" },
+        "termMonths": { "type": "number" },
+        "status": { "type": "string", "enum": ["ACTIVE", "REPAID", "DEFAULTED", "IN_REVIEW"] },
+        "disbursedAt": { "type": "string", "format": "date-time" },
+        "outstandingBalance": { "type": "number" }
+      },
+      "required": ["clientId", "amount", "status"]
+    },
+    "Application": {
+      "title": "Loan Application",
+      "description": "A request for a new loan.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clientId": { "type": "string" },
+        "requestedAmount": { "type": "number" },
+        "termMonths": { "type": "number" },
+        "purpose": { "type": "string" },
+        "employmentStatus": { "type": "string", "enum": ["EMPLOYED", "SELF_EMPLOYED", "BUSINESS_OWNER", "CONTRACTOR", "OTHER"] },
+        "annualIncome": { "type": "number" },
+        "status": { "type": "string", "enum": ["SUBMITTED", "IN_REVIEW", "APPROVED", "REJECTED"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientId", "requestedAmount", "status"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A financial movement (disbursement or repayment).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "loanId": { "type": "string" },
+        "type": { "type": "string", "enum": ["DISBURSEMENT", "REPAYMENT"] },
+        "amount": { "type": "number" },
+        "method": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["loanId", "type", "amount", "timestamp"]
+    },
+    "User": {
+      "title": "User",
+      "description": "System user with role-based access.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["ADMIN", "OFFICER", "AGENT", "AUDITOR"] },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "System users and roles"
+    },
+    "/clients/{clientId}": {
+      "schema": "Client",
+      "description": "Client profiles"
+    },
+    "/loans/{loanId}": {
+      "schema": "Loan",
+      "description": "Active and past loans"
+    },
+    "/applications/{applicationId}": {
+      "schema": "Application",
+      "description": "Loan applications"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Financial ledger entries"
+    }
+  }
+}
