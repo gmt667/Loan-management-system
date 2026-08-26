@@ -69,8 +69,10 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useTheme as useNextTheme } from 'next-themes';
 
-// Firebase
-import { auth, db } from './lib/firebase';
+// MySQL API adapters
+import { auth, type User, onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword } from './lib/auth';
+import { db, collection, onSnapshot, query, orderBy, limit, addDoc, updateDoc, serverTimestamp, getDocFromServer, doc, getDoc, getDocs, where, setDoc } from './lib/database';
+/*
 import { 
   onAuthStateChanged, 
   signInWithEmailAndPassword, 
@@ -94,6 +96,7 @@ import {
   where,
   setDoc
 } from 'firebase/firestore';
+*/
 
 // Error Handling
 enum OperationType {
@@ -501,11 +504,7 @@ function App() {
   const sessionProfile = authProfile || localSessionProfile;
   const isPendingAgent = sessionProfile?.role === 'AGENT' && sessionProfile.status === 'PENDING';
 
-  const predefinedRoleAccounts: Record<string, { role: UserRole; password: string; name: string }> = {
-    'admin@giantfluid.com': { role: 'ADMIN', password: 'admin123', name: 'System Admin' },
-    'officer@giantfluid.com': { role: 'OFFICER', password: 'officer123', name: 'Loan Officer' },
-    'auditor@giantfluid.com': { role: 'AUDITOR', password: 'auditor123', name: 'Compliance Auditor' },
-  };
+  const predefinedRoleAccounts: Record<string, any> = {};
 
   const fetchUserProfileByEmail = async (emailAddress: string) => {
     try {
@@ -764,67 +763,14 @@ function App() {
 
     try {
       const normalizedEmail = normalizeEmail(email);
-      const predefinedAccount = predefinedRoleAccounts[normalizedEmail];
-      if (predefinedAccount) {
-        if (password !== predefinedAccount.password) {
-          throw { code: 'auth/invalid-login-credentials', message: 'Invalid email or password.' };
-        }
-
-        const profile: AuthProfile = {
-          id: `local-${predefinedAccount.role.toLowerCase()}`,
-          uid: `local-${predefinedAccount.role.toLowerCase()}`,
-          name: predefinedAccount.name,
-          email: normalizedEmail,
-          role: predefinedAccount.role,
-          status: 'ACTIVE',
-          lastLogin: new Date().toISOString(),
-          lastDevice: getDeviceInfo()
-        };
-        setLocalSessionProfile(profile);
-        setAuthProfile(null);
-        setRole(predefinedAccount.role);
-        setCurrentView('dashboard');
-        setLoginAttempts({ count: 0, lockedUntil: 0 });
-        toast.success(`Welcome back, ${profile.name} (${profile.role})`);
+      const credential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      if (!credential.user.emailVerified) {
+        await signOut();
+        toast.error('Verify your email address before signing in.');
         return;
       }
-
-      const profile = await fetchUserProfileByEmail(normalizedEmail);
-      if (!profile) {
-        setPendingEmailPrompt(normalizedEmail);
-        toast.info('Account not found. You can register as an agent below.');
-        return;
-      }
-
-      if (profile.role !== 'AGENT') {
-        toast.error('Use the predefined role accounts for admin, officer, and auditor access.');
-        return;
-      }
-      if ((profile as any).demoPassword !== password) {
-        throw { code: 'auth/invalid-login-credentials', message: 'Invalid email or password.' };
-      }
-
-      const updatedProfile = { 
-        ...profile, 
-        lastLogin: new Date().toISOString(), 
-        lastDevice: getDeviceInfo() 
-      };
-      
-      if (profile.id.startsWith('demo-')) {
-        saveLocalUser(updatedProfile);
-      } else {
-        updateDoc(doc(db, 'users', profile.id), {
-          lastLogin: updatedProfile.lastLogin,
-          lastDevice: updatedProfile.lastDevice
-        }).catch(console.error);
-      }
-
-      setLocalSessionProfile(updatedProfile);
-      setAuthProfile(null);
-      setRole(profile.role);
-      setCurrentView('dashboard');
+      setLocalSessionProfile(null);
       setLoginAttempts({ count: 0, lockedUntil: 0 });
-      toast.success(`Welcome back, ${profile.name || 'Agent'} (${profile.role})`);
     } catch (error: any) {
       console.error("Login failed", error);
       setLoginError(error.code);
@@ -947,7 +893,8 @@ function App() {
 
     console.log('Registration submitted for email:', normalizedEmail);
     try {
-      const generatedId = `demo-${Math.random().toString(36).substr(2, 9)}`;
+      const credential = await createUserWithEmailAndPassword(auth, normalizedEmail, registrationData.password);
+      const generatedId = credential.user.uid;
       const payload = {
         id: generatedId,
         uid: generatedId,
@@ -958,7 +905,6 @@ function App() {
         address: registrationData.address.trim(),
         guarantorReference: registrationData.guarantorReference.trim(),
         profilePhotoName: registrationFiles.profilePhoto?.name || '',
-        demoPassword: registrationData.password,
         role: 'AGENT' as UserRole,
         status: 'PENDING' as UserStatus,
         createdAt: new Date().toISOString(),
@@ -1063,32 +1009,7 @@ function App() {
     const normalized = normalizeEmail(forgotEmail);
 
     try {
-      if (predefinedRoleAccounts[normalized]) {
-        predefinedRoleAccounts[normalized].password = forgotNewPassword;
-      }
-
-      const locals = getLocalUsers();
-      const localUser = locals.find(u => normalizeEmail(u.email) === normalized);
-      if (localUser) {
-        localUser.demoPassword = forgotNewPassword;
-        saveLocalUser(localUser);
-      }
-
-      try {
-        const q = query(collection(db, 'users'), where('email', '==', normalized), limit(1));
-        const snapshot = await getDocs(q);
-        if (!snapshot.empty) {
-          const docId = snapshot.docs[0].id;
-          await updateDoc(doc(db, 'users', docId), {
-            demoPassword: forgotNewPassword,
-            updatedAt: serverTimestamp()
-          });
-        }
-      } catch (dbErr) {
-        console.warn('Firestore password update skipped/blocked by rules:', dbErr);
-      }
-
-      toast.success('Password reset successfully! Please sign in with your new password.');
+      toast.error('Password reset requires the configured server OTP provider. Contact an administrator until provider setup is complete.');
       setEmail(normalized);
       setPassword('');
       setAuthMode('login');
@@ -2747,9 +2668,7 @@ function SystemSettingsView() {
     } catch (e: any) {
       if (e.code === 'not-found') {
         try {
-          await import('firebase/firestore').then(({ setDoc }) => 
-            setDoc(doc(db, 'settings', 'global'), settings)
-          );
+          await setDoc(doc(db, 'settings', 'global'), settings);
           toast.success("System settings initialized and saved");
         } catch (createError) {
           handleFirestoreError(createError, OperationType.WRITE, 'settings/global');
