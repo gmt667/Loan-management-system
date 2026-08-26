@@ -1,0 +1,10 @@
+const API_URL=(import.meta as any).env?.VITE_API_URL||'http://localhost:3001/api';const TOKEN='giantfluid_auth_token';
+export type User={uid:string;email:string;emailVerified:boolean;displayName?:string|null;isAnonymous:false;tenantId:null;providerData:any[];getIdToken:()=>Promise<string>};
+const listeners=new Set<(user:User|null)=>void>();export const auth:{currentUser:User|null}={currentUser:null};
+const makeUser=(data:any):User=>({...data,isAnonymous:false,tenantId:null,providerData:[],getIdToken:async()=>localStorage.getItem(TOKEN)||''});
+function setSession(data:any|null){if(data){localStorage.setItem(TOKEN,data.token);auth.currentUser=makeUser(data.user);}else{localStorage.removeItem(TOKEN);auth.currentUser=null;}listeners.forEach(fn=>fn(auth.currentUser));}
+async function request(path:string,body?:any,method='POST'){const token=localStorage.getItem(TOKEN);const response=await fetch(`${API_URL}${path}`,{method,credentials:'include',headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})},body:body===undefined?undefined:JSON.stringify(body)});const data=await response.json().catch(()=>({}));if(!response.ok)throw Object.assign(new Error(data.error||'Authentication failed'),{code:data.code||'auth/error'});return data;}
+export function onAuthStateChanged(_auth:unknown,listener:(user:User|null)=>void){listeners.add(listener);if(!localStorage.getItem(TOKEN))queueMicrotask(()=>listener(null));else request('/auth/me',undefined,'GET').then(data=>{auth.currentUser=makeUser(data.user);listener(auth.currentUser);}).catch(()=>setSession(null));return()=>listeners.delete(listener);}
+export async function signInWithEmailAndPassword(_auth:unknown,email:string,password:string){const data=await request('/auth/login',{email,password});setSession(data);return{user:auth.currentUser!};}
+export async function createUserWithEmailAndPassword(_auth:unknown,email:string,password:string){const data=await request('/auth/register',{email,password});setSession(data);return{user:auth.currentUser!};}
+export async function signOut(_auth?:unknown){try{await request('/auth/logout');}catch{}setSession(null);}
