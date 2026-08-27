@@ -1,0 +1,9 @@
+# Collections workspace
+
+Collections uses an explicit date-only Africa/Blantyre business date and calendar-day comparisons. An unpaid schedule row is due today when its due date equals the business date and overdue when its due date is earlier. Fully allocated rows are settled; future rows are upcoming. Days past due is the business date minus the oldest unpaid overdue due date. Buckets are Current/Due Today, 1–7, 8–30, 31–60, 61–90, and more than 90 days.
+
+Active case statuses are `OPEN`, `IN_PROGRESS`, `PROMISE_TO_PAY`, and `MONITORING`; only one active case can exist per normalized loan. `RESOLVED` and `CLOSED` retain history and may reopen to `OPEN` with a reason. Closing and resolution require a reason. Administrators assign or reassign eligible active administrators/officers with a reason. Officers perform collection work; auditors are read-only; agents have no implicit access.
+
+Actions record work completed outside the application: phone call, manually recorded SMS/email, visit, letter, member or next-of-kin contact, promise, no answer, incorrect contact, follow-up, and other. No message or call is initiated. Next of kin is not represented as legally liable. Promises are non-financial commitments, begin pending, and require an authorized reasoned update to kept, partially kept, broken, or cancelled; they never create repayments.
+
+All displayed financial figures are reproducible from normalized schedules, contractual allocations, and committed penalty projections. Collections never records or allocates repayment, assesses or pays penalties, changes balances, posts accounting, restructures, writes off, sends notifications, or performs legal or repossession activity. National-ID images and unrelated documents are excluded, and audit details omit contact numbers and free-text notes.
