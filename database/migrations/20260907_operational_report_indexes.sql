@@ -1,0 +1,8 @@
+CREATE INDEX idx_report_application_date_status ON loan_applications(application_date,status,product_id);
+CREATE INDEX idx_report_disbursement_date_method ON loan_disbursements(disbursement_date,status,method);
+CREATE INDEX idx_report_loan_status_dates ON normalized_loans(status,disbursement_date,maturity_date);
+CREATE INDEX idx_report_schedule_due_loan ON loan_repayment_schedule(due_date,loan_id,status);
+CREATE INDEX idx_report_repayment_date_method ON loan_repayments(payment_date,method,recorded_by);
+CREATE INDEX idx_report_penalty_payment_date ON loan_penalty_payments(payment_date,method,recorded_by);
+CREATE INDEX idx_report_penalty_assessment_date ON loan_penalty_charges(assessment_date,status,policy_id);
+CREATE INDEX idx_report_collection_opened ON loan_collection_cases(opened_date,status,assigned_officer_id);
