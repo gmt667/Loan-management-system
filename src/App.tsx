@@ -68,10 +68,18 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useTheme as useNextTheme } from 'next-themes';
+import LoanProductsView from './LoanProductsView';
+import ApplicationReviewsView from './ApplicationReviewsView';
+import LoanDisbursementsView from './LoanDisbursementsView';
+import NormalizedRepaymentsView from './NormalizedRepaymentsView';
+import PenaltySettingsView from './PenaltySettingsView';
+import PenaltiesView from './PenaltiesView';
+import PenaltyPaymentsView from './PenaltyPaymentsView';
+import CollectionsWorkspace from './CollectionsWorkspace';
 
 // MySQL API adapters
 import { auth, type User, onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword } from './lib/auth';
-import { db, collection, onSnapshot, query, orderBy, limit, addDoc, updateDoc, serverTimestamp, getDocFromServer, doc, getDoc, getDocs, where, setDoc } from './lib/database';
+import { db, collection, onSnapshot, query, orderBy, limit, addDoc, updateDoc, serverTimestamp, getDocFromServer, doc, getDoc, getDocs, where, setDoc, getMemberDistricts, getTraditionalAuthorities, getLoanProducts, estimateLoanApplication, submitLoanApplication } from './lib/database';
 /*
 import { 
   onAuthStateChanged, 
@@ -206,9 +214,42 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 // Types
-type View = 'dashboard' | 'clients' | 'applications' | 'approvals' | 'repayments' | 'settings' | 'payments' | 'transactions' | 'due-loans' | 'users' | 'loan-products' | 'loans' | 'reports' | 'audit-logs' | 'transactions-audit' | 'anomalies' | 'user-activity' | 'cases';
+type View = 'dashboard' | 'due-today' | 'overdue-loans' | 'collection-cases' | 'clients' | 'applications' | 'approvals' | 'loan-disbursements' | 'record-repayment' | 'repayments' | 'penalties' | 'penalty-settings' | 'settings' | 'payments' | 'transactions' | 'due-loans' | 'users' | 'loan-products' | 'loans' | 'reports' | 'audit-logs' | 'transactions-audit' | 'anomalies' | 'user-activity' | 'cases';
 type UserRole = 'ADMIN' | 'OFFICER' | 'AGENT' | 'AUDITOR';
 type UserStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'SUSPENDED';
+
+type SidebarLink = { label: string; view: View; icon: React.ElementType };
+type SidebarEntry = SidebarLink | { id: string; label: string; icon: React.ElementType; children: SidebarLink[] };
+const sidebarLink = (label: string, view: View, icon: React.ElementType): SidebarLink => ({ label, view, icon });
+const ADMIN_SIDEBAR: SidebarEntry[] = [
+  { id: 'members', label: 'Members', icon: Users, children: [sidebarLink('All Members', 'clients', Users)] },
+  { id: 'applications', label: 'Applications', icon: FileText, children: [sidebarLink('All Applications', 'applications', FileText), sidebarLink('Pending Approvals', 'approvals', CheckCircle2), sidebarLink('Cases', 'cases', Briefcase)] },
+  { id: 'loans', label: 'Loans', icon: Briefcase, children: [sidebarLink('Loan Products', 'loan-products', Briefcase),sidebarLink('Penalty Settings', 'penalty-settings', Settings),sidebarLink('Penalties', 'penalties', AlertCircle), sidebarLink('Loan Disbursements', 'loan-disbursements', DollarSign), sidebarLink('All Loans', 'loans', FileText), sidebarLink('Due Loans', 'due-loans', Clock)] },
+  { id: 'repayments', label: 'Repayments', icon: CreditCard, children: [sidebarLink('Record Repayment', 'record-repayment', CreditCard),sidebarLink('Repayment History', 'repayments', History)] },
+  { id: 'finance', label: 'Finance', icon: DollarSign, children: [sidebarLink('Payments', 'payments', DollarSign), sidebarLink('Transactions', 'transactions', History)] },
+  { id: 'collections', label: 'Collections', icon: Clock, children: [sidebarLink('Due Today', 'due-today', Clock), sidebarLink('Overdue Loans', 'overdue-loans', AlertCircle), sidebarLink('Collection Cases', 'collection-cases', Briefcase)] },
+  sidebarLink('Reports', 'reports', BarChart3),
+  { id: 'administration', label: 'Administration', icon: ShieldAlert, children: [sidebarLink('Users', 'users', Users), sidebarLink('User Activity', 'user-activity', Users), sidebarLink('Audit Logs', 'audit-logs', ShieldAlert), sidebarLink('Anomalies', 'anomalies', AlertCircle)] },
+];
+const MANAGER_SIDEBAR: SidebarEntry[] = [
+  { id: 'members', label: 'Members', icon: Users, children: [sidebarLink('All Members', 'clients', Users)] },
+  { id: 'applications', label: 'Applications', icon: FileText, children: [sidebarLink('All Applications', 'applications', FileText), sidebarLink('Pending Approvals', 'approvals', CheckCircle2), sidebarLink('Cases', 'cases', Briefcase)] },
+  { id: 'loans', label: 'Loans', icon: Briefcase, children: [sidebarLink('Loan Products', 'loan-products', Briefcase),sidebarLink('Penalty Settings', 'penalty-settings', Settings),sidebarLink('Penalties', 'penalties', AlertCircle), sidebarLink('Loan Disbursements', 'loan-disbursements', DollarSign), sidebarLink('All Loans', 'loans', FileText), sidebarLink('Due Loans', 'due-loans', Clock)] },
+  { id: 'repayments', label: 'Repayments', icon: CreditCard, children: [sidebarLink('Record Repayment', 'record-repayment', CreditCard),sidebarLink('Repayment History', 'repayments', History)] },
+  sidebarLink('Reports', 'reports', BarChart3),
+  { id: 'collections', label: 'Collections', icon: Clock, children: [sidebarLink('Due Today', 'due-today', Clock), sidebarLink('Overdue Loans', 'overdue-loans', AlertCircle), sidebarLink('Collection Cases', 'collection-cases', Briefcase)] },
+];
+const AUDITOR_SIDEBAR: SidebarEntry[] = [
+  { id: 'applications', label: 'Applications', icon: FileText, children: [sidebarLink('Pending Approvals', 'approvals', CheckCircle2),sidebarLink('Cases', 'cases', Briefcase)] },
+  { id: 'loans', label: 'Loans', icon: Briefcase, children: [sidebarLink('Loan Products', 'loan-products', Briefcase),sidebarLink('Penalty Settings', 'penalty-settings', Settings),sidebarLink('Penalties', 'penalties', AlertCircle), sidebarLink('Loan Disbursements', 'loan-disbursements', DollarSign)] },
+  { id: 'repayments', label: 'Repayments', icon: CreditCard, children: [sidebarLink('Repayment History', 'repayments', History)] },
+  { id: 'finance', label: 'Finance', icon: DollarSign, children: [sidebarLink('Transactions', 'transactions-audit', History)] },
+  { id: 'collections', label: 'Collections', icon: Clock, children: [sidebarLink('Due Today', 'due-today', Clock), sidebarLink('Overdue Loans', 'overdue-loans', AlertCircle), sidebarLink('Collection Cases', 'collection-cases', Briefcase)] },
+  sidebarLink('Reports', 'reports', BarChart3),
+  { id: 'administration', label: 'Administration', icon: ShieldAlert, children: [sidebarLink('User Activity', 'user-activity', Users), sidebarLink('Audit Logs', 'audit-logs', ShieldAlert), sidebarLink('Anomalies', 'anomalies', AlertCircle)] },
+];
+const AGENT_SIDEBAR: SidebarEntry[] = [sidebarLink('Members', 'clients', UserPlus), sidebarLink('Applications', 'applications', FileText), sidebarLink('Transactions', 'transactions', History), sidebarLink('Due Loans', 'due-loans', Clock)];
+const SIDEBAR_BY_ROLE: Record<UserRole, SidebarEntry[]> = { ADMIN: ADMIN_SIDEBAR, OFFICER: MANAGER_SIDEBAR, AUDITOR: AUDITOR_SIDEBAR, AGENT: AGENT_SIDEBAR };
 
 interface AuthProfile {
   id: string;
@@ -241,6 +282,12 @@ const PHONE_REGEX = /^(\+?265|0)?(8|9)\d{8}$/;
 const ID_NUMBER_REGEX = /^[A-Z0-9/-]{6,20}$/i;
 
 const formatPhoneDisplay = (value: string) => value.replace(/\s+/g, '').trim();
+const normalizeMemberPhone = (value: string) => {
+  let phone = value.trim().replace(/[\s()-]/g, '');
+  if (/^0[89]\d{8}$/.test(phone)) phone = `+265${phone.slice(1)}`;
+  else if (/^265[89]\d{8}$/.test(phone)) phone = `+${phone}`;
+  return /^\+[1-9]\d{7,14}$/.test(phone) ? phone : null;
+};
 
 const COLORS = ['#208CA2', '#42DAD9', '#0A4969', '#146886'];
 
@@ -433,6 +480,7 @@ function App() {
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [openSidebarSection, setOpenSidebarSection] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole>('AGENT');
   const [authProfile, setAuthProfile] = useState<AuthProfile | null>(null);
@@ -503,6 +551,17 @@ function App() {
   const [showRegistrationSuccessPanel, setShowRegistrationSuccessPanel] = useState(false);
   const sessionProfile = authProfile || localSessionProfile;
   const isPendingAgent = sessionProfile?.role === 'AGENT' && sessionProfile.status === 'PENDING';
+
+  useEffect(() => {
+    const parent = SIDEBAR_BY_ROLE[role].find(entry => 'children' in entry && entry.children.some(child => child.view === currentView));
+    if (parent && 'id' in parent) setOpenSidebarSection(parent.id);
+  }, [currentView, role]);
+
+  useEffect(() => {
+    if (currentView === 'dashboard' || currentView === 'settings') return;
+    const allowed = SIDEBAR_BY_ROLE[role].some(entry => 'children' in entry ? entry.children.some(child => child.view === currentView) : entry.view === currentView);
+    if (!allowed) setCurrentView('dashboard');
+  }, [currentView, role]);
 
   const predefinedRoleAccounts: Record<string, any> = {};
 
@@ -1429,7 +1488,7 @@ function App() {
 
 
   const renderNavItems = (isMobile = false) => (
-    <nav className="flex-1 space-y-1 mt-2">
+    <nav className="flex-1 space-y-1 mt-2 overflow-y-auto py-2">
       <NavItem 
         icon={<LayoutDashboard size={16} />} 
         label="Dashboard" 
@@ -1438,194 +1497,42 @@ function App() {
         collapsed={!isMobile && !isSidebarOpen}
       />
       
-      {role === 'ADMIN' && (
-        <>
-          <NavItem 
-            icon={<Users size={16} />} 
-            label="Users" 
-            active={currentView === 'users'} 
-            onClick={() => { setCurrentView('users'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<UserPlus size={16} />} 
-            label="Clients" 
-            active={currentView === 'clients'} 
-            onClick={() => { setCurrentView('clients'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<Briefcase size={16} />} 
-            label="Loan Products" 
-            active={currentView === 'loan-products'} 
-            onClick={() => { setCurrentView('loan-products'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<FileText size={16} />} 
-            label="Loans" 
-            active={currentView === 'loans'} 
-            onClick={() => { setCurrentView('loans'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<History size={16} />} 
-            label="Transactions" 
-            active={currentView === 'transactions'} 
-            onClick={() => { setCurrentView('transactions'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<BarChart3 size={16} />} 
-            label="Reports" 
-            active={currentView === 'reports'} 
-            onClick={() => { setCurrentView('reports'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<ShieldAlert size={16} />} 
-            label="Audit Logs" 
-            active={currentView === 'audit-logs'} 
-            onClick={() => { setCurrentView('audit-logs'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-        </>
-      )}
-
-      {role === 'OFFICER' && (
-        <>
-          <NavItem 
-            icon={<Users size={16} />} 
-            label="Clients" 
-            active={currentView === 'clients'} 
-            onClick={() => { setCurrentView('clients'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<FileText size={16} />} 
-            label="Applications" 
-            active={currentView === 'applications'} 
-            onClick={() => { setCurrentView('applications'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<CheckCircle2 size={16} />} 
-            label="Approvals" 
-            active={currentView === 'approvals'} 
-            onClick={() => { setCurrentView('approvals'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<CreditCard size={16} />} 
-            label="Repayments" 
-            active={currentView === 'repayments'} 
-            onClick={() => { setCurrentView('repayments'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<DollarSign size={16} />} 
-            label="Loans" 
-            active={currentView === 'loans'} 
-            onClick={() => { setCurrentView('loans'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<BarChart3 size={16} />} 
-            label="Reports" 
-            active={currentView === 'reports'} 
-            onClick={() => { setCurrentView('reports'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-        </>
-      )}
-
-      {role === 'AUDITOR' && (
-        <>
-          <NavItem 
-            icon={<ShieldAlert size={16} />} 
-            label="Audit Logs" 
-            active={currentView === 'audit-logs'} 
-            onClick={() => { setCurrentView('audit-logs'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<History size={16} />} 
-            label="Transactions Audit" 
-            active={currentView === 'transactions-audit'} 
-            onClick={() => { setCurrentView('transactions-audit'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<AlertCircle size={16} />} 
-            label="Anomalies" 
-            active={currentView === 'anomalies'} 
-            onClick={() => { setCurrentView('anomalies'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<BarChart3 size={16} />} 
-            label="Reports" 
-            active={currentView === 'reports'} 
-            onClick={() => { setCurrentView('reports'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<Users size={16} />} 
-            label="User Activity" 
-            active={currentView === 'user-activity'} 
-            onClick={() => { setCurrentView('user-activity'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<Briefcase size={16} />} 
-            label="Cases" 
-            active={currentView === 'cases'} 
-            onClick={() => { setCurrentView('cases'); if (isMobile) setIsMobileMenuOpen(false); }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-        </>
-      )}
-
-      {role === 'AGENT' && (
-        <>
-          <NavItem 
-            icon={<UserPlus size={16} />} 
-            label="Clients" 
-            active={currentView === 'clients'} 
-            onClick={() => { if (!isPendingAgent) { setCurrentView('clients'); if (isMobile) setIsMobileMenuOpen(false); } }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<FileText size={16} />} 
-            label="Applications" 
-            active={currentView === 'applications'} 
-            onClick={() => { if (!isPendingAgent) { setCurrentView('applications'); if (isMobile) setIsMobileMenuOpen(false); } }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<DollarSign size={16} />} 
-            label="Payments" 
-            active={currentView === 'payments'} 
-            onClick={() => { if (!isPendingAgent) { setCurrentView('payments'); if (isMobile) setIsMobileMenuOpen(false); } }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<History size={16} />} 
-            label="Transactions" 
-            active={currentView === 'transactions'} 
-            onClick={() => { if (!isPendingAgent) { setCurrentView('transactions'); if (isMobile) setIsMobileMenuOpen(false); } }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-          <NavItem 
-            icon={<Clock size={16} />} 
-            label="Due Loans" 
-            active={currentView === 'due-loans'} 
-            onClick={() => { if (!isPendingAgent) { setCurrentView('due-loans'); if (isMobile) setIsMobileMenuOpen(false); } }}
-            collapsed={!isMobile && !isSidebarOpen}
-          />
-        </>
-      )}
-
+      {SIDEBAR_BY_ROLE[role].map(entry => {
+        const collapsed = !isMobile && !isSidebarOpen;
+        const Icon = entry.icon;
+        if ('children' in entry) {
+          const active = entry.children.some(child => child.view === currentView);
+          return (
+            <NavSection
+              key={entry.id}
+              id={`sidebar-${entry.id}-${isMobile ? 'mobile' : 'desktop'}`}
+              icon={<Icon size={16} />}
+              label={entry.label}
+              active={active}
+              open={openSidebarSection === entry.id}
+              collapsed={collapsed}
+              onToggle={() => {
+                if (!isMobile && !isSidebarOpen) setIsSidebarOpen(true);
+                setOpenSidebarSection(openSidebarSection === entry.id ? null : entry.id);
+              }}
+            >
+              {entry.children.map(child => {
+                const ChildIcon = child.icon;
+                return (
+                  <NavItem key={child.view} nested icon={<ChildIcon size={15} />} label={child.label} active={currentView === child.view}
+                    onClick={() => { if (role === 'AGENT' && isPendingAgent) return; setCurrentView(child.view); if (isMobile) setIsMobileMenuOpen(false); }}
+                    collapsed={false}
+                  />
+                );
+              })}
+            </NavSection>
+          );
+        }
+        return <NavItem key={entry.view} icon={<Icon size={16} />} label={entry.label} active={currentView === entry.view}
+          onClick={() => { if (role === 'AGENT' && isPendingAgent) return; setCurrentView(entry.view); if (isMobile) setIsMobileMenuOpen(false); }}
+          collapsed={collapsed}
+        />;
+      })}
       <NavItem 
         icon={<Settings size={16} />} 
         label="Settings" 
@@ -1836,17 +1743,27 @@ function App() {
             )}
             {currentView === 'approvals' && (
               <motion.div key="approvals">
-                <ApprovalsView applications={applications} role={role} />
+                <ApplicationReviewsView role={role} />
               </motion.div>
             )}
             {currentView === 'repayments' && (
               <motion.div key="repayments">
-                <RepaymentsView loans={loans} role={role} />
+                <NormalizedRepaymentsView role={role} initialMode="history" />
+              </motion.div>
+            )}
+            {currentView === 'record-repayment' && (
+              <motion.div key="record-repayment">
+                <NormalizedRepaymentsView role={role} initialMode="record" />
+              </motion.div>
+            )}
+            {currentView === 'loan-disbursements' && (
+              <motion.div key="loan-disbursements">
+                <LoanDisbursementsView role={role} />
               </motion.div>
             )}
             {currentView === 'payments' && (
               <motion.div key="payments">
-                {isPendingAgent ? <PendingAgentWorkspace profile={sessionProfile!} /> : <PaymentModule clients={clients} loans={loans} />}
+                <NormalizedRepaymentsView role={role} initialMode="record" />
               </motion.div>
             )}
             {currentView === 'transactions' && (
@@ -1866,7 +1783,18 @@ function App() {
             )}
             {currentView === 'loan-products' && (
               <motion.div key="loan-products">
-                <LoanProductsView />
+                <LoanProductsView role={role} />
+              </motion.div>
+            )}
+            {currentView === 'penalty-settings' && (
+              <motion.div key="penalty-settings">
+                <PenaltySettingsView role={role} />
+              </motion.div>
+            )}
+            {currentView === 'penalties' && (
+              <motion.div key="penalties">
+                <PenaltiesView role={role} />
+                <PenaltyPaymentsView role={role} />
               </motion.div>
             )}
             {currentView === 'loans' && (
@@ -1904,6 +1832,15 @@ function App() {
                 <CasesView users={users} applications={applications} loans={loans} transactions={transactions} />
               </motion.div>
             )}
+            {currentView === 'due-today' && (
+              <motion.div key="due-today"><CollectionsWorkspace mode="due" role={role} onNavigate={setCurrentView} /></motion.div>
+            )}
+            {currentView === 'overdue-loans' && (
+              <motion.div key="overdue-loans"><CollectionsWorkspace mode="overdue" role={role} onNavigate={setCurrentView} /></motion.div>
+            )}
+            {currentView === 'collection-cases' && (
+              <motion.div key="collection-cases"><CollectionsWorkspace mode="cases" role={role} onNavigate={setCurrentView} /></motion.div>
+            )}
             {currentView === 'settings' && (
               <motion.div key="settings">
                 <SettingsView 
@@ -1932,14 +1869,31 @@ function App() {
   );
 }
 
-function NavItem({ icon, label, active, onClick, collapsed }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, collapsed: boolean }) {
+function NavSection({ id, icon, label, active, open, onToggle, collapsed, children }: { key?: React.Key; id: string; icon: React.ReactNode; label: string; active: boolean; open: boolean; onToggle: () => void; collapsed: boolean; children: React.ReactNode }) {
+  return (
+    <div>
+      <button type="button" onClick={onToggle} title={collapsed ? label : undefined} aria-label={label} aria-expanded={open && !collapsed} aria-controls={id}
+        className={`w-full flex items-center gap-3 py-2.5 transition-all duration-200 border-l-[3px] ${collapsed ? 'justify-center px-2' : 'px-6'} ${active || open ? 'bg-white/5 text-white border-brand-400 font-semibold' : 'text-sidebar-foreground hover:text-white hover:bg-white/[0.03] border-transparent'}`}>
+        <span className={active || open ? 'text-white' : 'text-sidebar-foreground'}>{icon}</span>
+        {!collapsed && <><span className="min-w-0 flex-1 text-left text-[13px]">{label}</span><ChevronRight size={14} aria-hidden="true" className={`shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} /></>}
+      </button>
+      {!collapsed && <div id={id} role="group" aria-label={`${label} pages`} hidden={!open} className="bg-black/10 py-1">{children}</div>}
+    </div>
+  );
+}
+
+function NavItem({ icon, label, active, onClick, collapsed, nested = false }: { key?: React.Key; icon: React.ReactNode; label: string; active: boolean; onClick: () => void; collapsed: boolean; nested?: boolean }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-6 py-2.5 transition-all duration-200 border-l-[3px] ${
+      title={collapsed ? label : undefined}
+      aria-label={label}
+      aria-current={active ? 'page' : undefined}
+      className={`w-full flex items-center gap-3 py-2.5 transition-all duration-200 border-l-[3px] ${collapsed ? 'justify-center px-2' : nested ? 'pl-10 pr-5' : 'px-6'} ${
         active 
           ? 'bg-white/5 text-white border-brand-400 font-semibold' 
-          : 'text-sidebar-foreground hover:text-white border-transparent'
+          : 'text-sidebar-foreground hover:text-white hover:bg-white/[0.03] border-transparent'
       }`}
     >
       <span className={`${active ? 'text-white' : 'text-sidebar-foreground'}`}>{icon}</span>
@@ -2924,6 +2878,7 @@ function ClientsView({ clients, loans, role }: { clients: any[], loans: any[], r
                     id={client.id.slice(0, 8).toUpperCase()}
                     name={client.name}
                     email={client.email}
+                    emailSource={client.emailSource}
                     loans={activeLoansCount}
                     balance={`MWK ${(client.totalBalance || 0).toLocaleString()}`}
                     status={client.status}
@@ -2949,7 +2904,7 @@ function ClientsView({ clients, loans, role }: { clients: any[], loans: any[], r
   );
 }
 
-function ClientRow({ id, name, email, loans, balance, status, initials, role, onFlag }: any) {
+function ClientRow({ id, name, email, emailSource, loans, balance, status, initials, role, onFlag }: any) {
   return (
     <TableRow className="border-border hover:bg-[#F9FAFB] transition-colors">
       <TableCell className="px-6 py-2.5">
@@ -2962,7 +2917,7 @@ function ClientRow({ id, name, email, loans, balance, status, initials, role, on
           </Avatar>
           <div>
             <p className="text-[12px] font-semibold text-foreground">{name}</p>
-            <p className="text-[11px] text-muted-foreground">{email}</p>
+            <p className="text-[11px] text-muted-foreground">{email} {emailSource === 'SYSTEM_GENERATED' && <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase">Internal generated</span>}</p>
           </div>
         </div>
       </TableCell>
@@ -3030,6 +2985,7 @@ const emptyApplicationDraft = () => ({
   primaryPhone: '',
   secondaryPhone: '',
   email: '',
+  emailSource: 'MEMBER_PROVIDED',
   preferredContactMethod: 'PHONE',
   district: '',
   traditionalAuthority: '',
@@ -3038,16 +2994,32 @@ const emptyApplicationDraft = () => ({
   gpsCoordinates: '',
   employmentStatus: 'EMPLOYED',
   employerName: '',
+  employerAddress: '',
+  employerPhone: '',
+  employerEmail: '',
+  jobTitle: '',
+  department: '',
+  employmentLength: '',
+  employmentType: '',
+  otherIncome: '0',
+  supervisorContact: '',
+  workLocation: '',
+  otherEmploymentStatus: '',
   businessName: '',
   monthlyIncome: '0',
   incomeSourceDescription: '',
   nextOfKinName: '',
   nextOfKinRelationship: '',
+  nextOfKinRelationshipOther: '',
   nextOfKinPhone: '',
   nextOfKinAddress: '',
   hasExistingLoans: 'NO',
   existingLenderName: '',
+  originalExternalLoanAmount: '',
   outstandingBalance: '',
+  amountRepaid: '',
+  financialObligations: '0',
+  supportingNotes: '',
   paymentChannel: 'MOBILE_MONEY',
   mobileMoneyProvider: 'AIRTEL_MONEY',
   mobileMoneyNumber: '',
@@ -3060,11 +3032,12 @@ const emptyApplicationDraft = () => ({
   requestedAmount: '250000',
   termMonths: '12',
   purpose: '',
-  loanProduct: 'Commercial Growth Bridge',
+  loanProduct: '',
   currency: 'MWK',
 });
 
 const formatEmploymentLabel = (value?: string) => value?.replace(/_/g, ' ') || 'N/A';
+const moneyToMinor=(value:string)=>{const normalized=String(value||'').trim();if(!/^\d+(\.\d{1,2})?$/.test(normalized))return 0;const[whole,fraction='']=normalized.split('.');const minor=Number(whole)*100+Number(fraction.padEnd(2,'0'));return Number.isSafeInteger(minor)?minor:0;};
 
 const getClientName = (client: any) => {
   if (client?.name) return client.name;
@@ -3384,14 +3357,34 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
   const [files, setFiles] = useState<{
     idFront: File | null,
     idBack: File | null,
-    proofOfResidence: File | null,
     passportPhoto: File | null,
   }>({
     idFront: null,
     idBack: null,
-    proofOfResidence: null,
     passportPhoto: null,
   });
+  const [districtOptions, setDistrictOptions] = useState<Array<{ code: string; label: string }>>([]);
+  const [traditionalAuthorityOptions, setTraditionalAuthorityOptions] = useState<Array<{ code: string; label: string; parentCode: string }>>([]);
+  const [lookupError, setLookupError] = useState('');
+  const [loanProducts,setLoanProducts]=useState<any[]>([]);
+  const [applicationEstimate,setApplicationEstimate]=useState<any|null>(null);
+  const [estimateError,setEstimateError]=useState('');
+  const [isSubmitting,setIsSubmitting]=useState(false);
+  const [submissionKey,setSubmissionKey]=useState(()=>crypto.randomUUID());
+  const [submittedApplication,setSubmittedApplication]=useState<any|null>(null);
+
+  useEffect(() => {
+    getMemberDistricts().then(setDistrictOptions).catch((error: Error) => setLookupError(error.message));
+    getLoanProducts().then((products:any[])=>setLoanProducts(products)).catch((error:Error)=>setEstimateError(error.message));
+  }, []);
+
+  useEffect(() => {
+    if (!draft.district) { setTraditionalAuthorityOptions([]); return; }
+    getTraditionalAuthorities(draft.district).then(options => {
+      setTraditionalAuthorityOptions(options);
+      if (draft.traditionalAuthority && !options.some((option: any) => option.code === draft.traditionalAuthority)) setDraft(prev => ({ ...prev, traditionalAuthority: '' }));
+    }).catch((error: Error) => setLookupError(error.message));
+  }, [draft.district]);
 
   useEffect(() => {
     try {
@@ -3432,8 +3425,12 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
   const termMonths = parseInt(draft.termMonths, 10) || 0;
   const monthlyIncome = parseInt(draft.monthlyIncome, 10) || 0;
   const outstandingBalance = parseInt(draft.outstandingBalance, 10) || 0;
+  const originalExternalLoanAmount=parseInt(draft.originalExternalLoanAmount,10)||0;
+  const amountRepaid=parseInt(draft.amountRepaid,10)||0;
+  const financialObligations=parseInt(draft.financialObligations,10)||0;
+  const selectedProduct=loanProducts.find(product=>product.id===draft.loanProduct)||null;
   const applicantAge = getAgeFromDate(draft.dateOfBirth);
-  const totalPayable = Math.round(requestedAmount + (requestedAmount * 0.0525) + 2500);
+  const totalPayable = applicationEstimate?applicationEstimate.estimate.estimatedTotalMinor/100:requestedAmount;
   const monthlyRepayment = termMonths > 0 ? Math.round(totalPayable / termMonths) : 0;
 
   const draftClientStatus = draft.clientStatus === 'BLACKLISTED' ? 'BLACKLISTED' : draft.clientStatus;
@@ -3441,20 +3438,25 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
   const usesBankingDetails = draft.paymentChannel === 'BANK';
   const idValidation = getIdValidationState(draft.idNumber, clients);
   const kycFilesReady = Boolean(files.idFront && files.idBack);
+  const buildApplicationRequest=(memberId:string)=>({memberId,productId:draft.loanProduct,requestedAmountMinor:moneyToMinor(draft.requestedAmount),repaymentPeriods:termMonths,purpose:draft.purpose.trim(),applicantIncomeMinor:moneyToMinor(draft.monthlyIncome),financialObligationsMinor:moneyToMinor(draft.financialObligations),hasExternalLoan:hasExistingLoanDetails,externalLender:draft.existingLenderName.trim(),externalOriginalAmountMinor:hasExistingLoanDetails?moneyToMinor(draft.originalExternalLoanAmount):null,externalOutstandingMinor:hasExistingLoanDetails?moneyToMinor(draft.outstandingBalance):null,externalRepaidMinor:hasExistingLoanDetails?moneyToMinor(draft.amountRepaid):null,supportingNotes:draft.supportingNotes.trim(),documents:draft.mode==='new'?{idFrontFileName:files.idFront?.name||'',idBackFileName:files.idBack?.name||'',passportPhotoFileName:files.passportPhoto?.name||''}:(selectedClient?.documents||{}),idempotencyKey:submissionKey});
+
+  useEffect(()=>{setApplicationEstimate(null);setEstimateError('');if(!selectedClient?.id||!draft.loanProduct||!requestedAmount||!termMonths||!draft.purpose.trim())return;const timer=window.setTimeout(()=>estimateLoanApplication(buildApplicationRequest(selectedClient.id)).then(setApplicationEstimate).catch((error:Error)=>setEstimateError(error.message)),350);return()=>window.clearTimeout(timer);},[selectedClient?.id,draft.loanProduct,draft.requestedAmount,draft.termMonths,draft.purpose,draft.monthlyIncome,draft.financialObligations,draft.hasExistingLoans,draft.existingLenderName,draft.originalExternalLoanAmount,draft.outstandingBalance,draft.amountRepaid,submissionKey]);
 
   const resetDraft = () => {
     setDraft(emptyApplicationDraft());
     setFiles({
       idFront: null,
       idBack: null,
-      proofOfResidence: null,
       passportPhoto: null,
     });
     setCurrentStep(1);
+    setSubmissionKey(crypto.randomUUID());
+    setApplicationEstimate(null);
+    setSubmittedApplication(null);
     localStorage.removeItem(draftStorageKey);
   };
 
-  const handleFileChange = (field: 'idFront' | 'idBack' | 'proofOfResidence' | 'passportPhoto', event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (field: 'idFront' | 'idBack' | 'passportPhoto', event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0] || null;
     setFiles(prev => ({ ...prev, [field]: file }));
   };
@@ -3483,12 +3485,20 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
         toast.error('Client must be at least 18 years old.');
         return false;
       }
-      if (!PHONE_REGEX.test(formatPhoneDisplay(draft.primaryPhone))) {
-        toast.error('Enter a valid Malawi primary phone number.');
+      if (!normalizeMemberPhone(draft.primaryPhone)) {
+        toast.error('Enter a valid primary phone number, for example +265991234567.');
         return false;
       }
-      if (draft.secondaryPhone && !PHONE_REGEX.test(formatPhoneDisplay(draft.secondaryPhone))) {
-        toast.error('Enter a valid Malawi secondary phone number.');
+      if (!normalizeMemberPhone(draft.secondaryPhone)) {
+        toast.error('Enter a valid secondary phone number. It may be the same as the primary number.');
+        return false;
+      }
+      if (draft.emailSource === 'MEMBER_PROVIDED' && (!draft.email || !/^\S+@\S+\.\S+$/.test(draft.email.trim()))) {
+        toast.error('Enter a valid member-provided email or choose System-generated.');
+        return false;
+      }
+      if (draft.emailSource === 'MEMBER_PROVIDED' && clients.some(client => client.email?.toLowerCase() === draft.email.trim().toLowerCase())) {
+        toast.error('That email address is already assigned to another member.');
         return false;
       }
       if (idValidation.tone === 'invalid') {
@@ -3511,12 +3521,20 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
         toast.error('Monthly income must be greater than zero for a loan application.');
         return false;
       }
-      if (draft.employmentStatus === 'EMPLOYED' && !draft.employerName) {
-        toast.error('Employer name is required for employed applicants.');
+      if (draft.employmentStatus === 'EMPLOYED' && [draft.employerName, draft.employerAddress, draft.employerPhone, draft.employerEmail, draft.jobTitle, draft.department, draft.employmentLength, draft.employmentType, draft.supervisorContact, draft.workLocation].some(value => !value.trim())) {
+        toast.error('Complete all required employer and employment fields.');
         return false;
       }
-      if (draft.employmentStatus === 'SELF_EMPLOYED' && !draft.businessName) {
-        toast.error('Business name is required for self-employed applicants.');
+      if (draft.employmentStatus === 'EMPLOYED' && !normalizeMemberPhone(draft.employerPhone)) {
+        toast.error('Enter a valid employer phone number.');
+        return false;
+      }
+      if (draft.employmentStatus === 'EMPLOYED' && !/^\S+@\S+\.\S+$/.test(draft.employerEmail)) {
+        toast.error('Enter a valid employer email address.');
+        return false;
+      }
+      if (draft.employmentStatus === 'OTHER' && !draft.otherEmploymentStatus.trim()) {
+        toast.error('Specify the employment status.');
         return false;
       }
       return true;
@@ -3527,12 +3545,16 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
         toast.error('Next of kin / guarantor details are required.');
         return false;
       }
+      if (draft.mode === 'new' && draft.nextOfKinRelationship === 'OTHER' && !draft.nextOfKinRelationshipOther.trim()) {
+        toast.error('Specify the next-of-kin relationship.');
+        return false;
+      }
       if (draft.mode === 'new' && !kycFilesReady) {
         toast.error('Upload both front and back images of the National ID.');
         return false;
       }
-      if (hasExistingLoanDetails && (!draft.existingLenderName || outstandingBalance <= 0)) {
-        toast.error('Provide lender name and outstanding balance for existing loans.');
+      if (hasExistingLoanDetails && (!draft.existingLenderName || originalExternalLoanAmount <= 0 || outstandingBalance < 0 || amountRepaid < 0)) {
+        toast.error('Provide the external lender, original amount, outstanding balance, and amount repaid.');
         return false;
       }
       if (usesBankingDetails) {
@@ -3546,10 +3568,13 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
           return false;
         }
       }
-      if (!draft.purpose || requestedAmount <= 0 || termMonths <= 0) {
+      if (!draft.purpose || requestedAmount <= 0 || termMonths <= 0 || !selectedProduct) {
         toast.error('Loan product, amount, term, and purpose are required.');
         return false;
       }
+      if(selectedProduct.status!=='ACTIVE'||selectedProduct.effectiveDate>new Date().toISOString().slice(0,10)){toast.error('Select an active, effective loan product.');return false;}
+      if(moneyToMinor(draft.requestedAmount)<selectedProduct.minAmountMinor||moneyToMinor(draft.requestedAmount)>selectedProduct.maxAmountMinor){toast.error(`Requested amount must be between MWK ${(selectedProduct.minAmountMinor/100).toLocaleString()} and MWK ${(selectedProduct.maxAmountMinor/100).toLocaleString()}.`);return false;}
+      if(termMonths<selectedProduct.minPeriods||termMonths>selectedProduct.maxPeriods){toast.error(`Repayment period must be between ${selectedProduct.minPeriods} and ${selectedProduct.maxPeriods}.`);return false;}
       return true;
     }
 
@@ -3574,6 +3599,8 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
       }
     }
 
+    if(isSubmitting)return;
+    setIsSubmitting(true);
     try {
       let clientId = selectedClient?.id || '';
       const createdBy = {
@@ -3590,10 +3617,11 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
         dateOfBirth: draft.dateOfBirth,
         maritalStatus: draft.maritalStatus,
         idNumber: draft.idNumber.trim(),
-        phone: formatPhoneDisplay(draft.primaryPhone),
-        primaryPhone: formatPhoneDisplay(draft.primaryPhone),
-        secondaryPhone: formatPhoneDisplay(draft.secondaryPhone),
-        email: draft.email.trim(),
+        phone: normalizeMemberPhone(draft.primaryPhone)!,
+        primaryPhone: normalizeMemberPhone(draft.primaryPhone)!,
+        secondaryPhone: normalizeMemberPhone(draft.secondaryPhone)!,
+        email: draft.emailSource === 'MEMBER_PROVIDED' ? draft.email.trim().toLowerCase() : '',
+        emailSource: draft.emailSource,
         preferredContactMethod: draft.preferredContactMethod,
         district: draft.district.trim(),
         traditionalAuthority: draft.traditionalAuthority.trim(),
@@ -3604,17 +3632,22 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
         employerName: draft.employerName.trim(),
         businessName: draft.businessName.trim(),
         monthlyIncome,
+        employmentDetails: {
+          employerName: draft.employerName.trim(), employerAddress: draft.employerAddress.trim(), employerPhone: normalizeMemberPhone(draft.employerPhone) || '', employerEmail: draft.employerEmail.trim().toLowerCase(),
+          jobTitle: draft.jobTitle.trim(), department: draft.department.trim(), employmentLength: draft.employmentLength.trim(), employmentType: draft.employmentType.trim(), monthlyIncome: draft.monthlyIncome,
+          otherIncome: draft.otherIncome, supervisorContact: draft.supervisorContact.trim(), workLocation: draft.workLocation.trim(), businessName: draft.businessName.trim(), otherEmploymentStatus: draft.otherEmploymentStatus.trim(),
+        },
         incomeSourceDescription: draft.incomeSourceDescription.trim(),
         nextOfKin: {
           fullName: draft.nextOfKinName.trim(),
           relationship: draft.nextOfKinRelationship.trim(),
-          phoneNumber: formatPhoneDisplay(draft.nextOfKinPhone),
+          relationshipOther: draft.nextOfKinRelationshipOther.trim(),
+          phoneNumber: normalizeMemberPhone(draft.nextOfKinPhone) || formatPhoneDisplay(draft.nextOfKinPhone),
           address: draft.nextOfKinAddress.trim(),
         },
         documents: {
           idFrontFileName: files.idFront?.name || '',
           idBackFileName: files.idBack?.name || '',
-          proofOfResidenceFileName: files.proofOfResidence?.name || '',
           passportPhotoFileName: files.passportPhoto?.name || '',
         },
         financialProfile: {
@@ -3644,19 +3677,8 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
       } : null;
 
       if (clientPayload) {
-        try {
-          const clientRef = await addDoc(collection(db, 'clients'), clientPayload);
-          clientId = clientRef.id;
-        } catch (err: any) {
-          if (err.code === 'permission-denied' || err.message?.includes('permission')) {
-            console.warn('Client registration blocked by permissions. Falling back to Simulation Mode.');
-            const localId = `local-client-${Math.random().toString(36).substr(2, 9)}`;
-            clientId = localId;
-            saveLocalClient({ ...clientPayload, id: localId, uid: localId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-          } else {
-            throw err;
-          }
-        }
+        const clientRef = await addDoc(collection(db, 'clients'), clientPayload);
+        clientId = clientRef.id;
       } else if (selectedClient?.id) {
         try {
           await updateDoc(doc(db, 'clients', selectedClient.id), {
@@ -3753,7 +3775,6 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
         documents: {
           idFrontFileName: files.idFront?.name || '',
           idBackFileName: files.idBack?.name || '',
-          proofOfResidenceFileName: files.proofOfResidence?.name || '',
           passportPhotoFileName: files.passportPhoto?.name || '',
         },
         financialProfile: {
@@ -3772,21 +3793,14 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
         updatedAt: serverTimestamp(),
       };
 
-      try {
-        await addDoc(collection(db, 'applications'), applicationPayload);
-      } catch (err: any) {
-        if (err.code === 'permission-denied' || err.message?.includes('permission')) {
-          console.warn('Application submission blocked by permissions. Falling back to Simulation Mode.');
-          saveLocalApplication({ ...applicationPayload, id: `local-app-${Math.random().toString(36).substr(2, 9)}`, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-        } else {
-          throw err;
-        }
-      }
-
-      toast.success(draft.mode === 'new' ? 'Client registered and application submitted successfully' : 'Application submitted successfully');
+      const result=await submitLoanApplication(buildApplicationRequest(clientId));
+      toast.success(`Application ${result.referenceNumber} submitted for assessment.`);
       resetDraft();
+      setSubmittedApplication(result.application||result);
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, 'applications');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -3811,6 +3825,7 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
           </Badge>
         </div>
       </div>
+      {submittedApplication&&<Card className="border-emerald-300 bg-emerald-50 p-5 text-emerald-950"><p className="font-bold">Application submitted for assessment</p><p className="text-sm mt-1">Reference: <span className="font-black">{submittedApplication.referenceNumber}</span> · Status: {submittedApplication.status||'SUBMITTED'}</p><p className="text-xs mt-2">Eligibility permits submission only; it is not final loan approval.</p></Card>}
 
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
         {/* Steps */}
@@ -3878,7 +3893,7 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
                 {filteredClients.map(client => (
                   <Card
                     key={client.id}
-                    onClick={() => role !== 'AUDITOR' && draft.mode === 'existing' && setDraft(prev => ({ ...prev, selectedClientId: client.id }))}
+                    onClick={() => role !== 'AUDITOR' && draft.mode === 'existing' && setDraft(prev => ({ ...prev, selectedClientId: client.id,monthlyIncome:String(client.monthlyIncome||client.employmentDetails?.monthlyIncome||0),employmentStatus:client.employmentStatus||client.employmentDetails?.status||prev.employmentStatus,incomeSourceDescription:client.incomeSourceDescription||client.employmentDetails?.incomeSourceDescription||'Existing member profile' }))}
                     className={`p-4 flex items-center justify-between transition-all ${
                       draft.mode === 'existing'
                         ? 'cursor-pointer'
@@ -3939,21 +3954,21 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
               ) : (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Field label="First Name"><Input value={draft.firstName} onChange={(e) => setDraftField('firstName', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
-                    <Field label="Last Name"><Input value={draft.lastName} onChange={(e) => setDraftField('lastName', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
-                    <Field label="Gender">
+                    <Field label="First Name" required><Input value={draft.firstName} onChange={(e) => setDraftField('firstName', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                    <Field label="Last Name" required><Input value={draft.lastName} onChange={(e) => setDraftField('lastName', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                    <Field label="Gender" required>
                       <select value={draft.gender} onChange={(e) => setDraftField('gender', e.target.value)} disabled={role === 'AUDITOR'} className="w-full h-11 rounded-md border border-slate-200 bg-white px-3 text-sm">
                         <option value="">Select gender</option>
                         <option value="MALE">Male</option>
                         <option value="FEMALE">Female</option>
                       </select>
                     </Field>
-                    <Field label="Date of Birth">
+                    <Field label="Date of Birth" required>
                       <Input type="date" value={draft.dateOfBirth} onChange={(e) => setDraftField('dateOfBirth', e.target.value)} disabled={role === 'AUDITOR'} />
                     </Field>
-                    <Field label="National ID / Passport Number">
+                    <Field label="National ID / Passport Number" required>
                       <div className="space-y-2">
-                        <Input value={draft.idNumber} onChange={(e) => setDraftField('idNumber', e.target.value.toUpperCase())} disabled={role === 'AUDITOR'} />
+                        <Input required aria-required="true" value={draft.idNumber} onChange={(e) => setDraftField('idNumber', e.target.value.toUpperCase())} disabled={role === 'AUDITOR'} />
                         <p className={`text-[11px] font-medium ${
                           idValidation.tone === 'valid' ? 'text-emerald-600' :
                           idValidation.tone === 'invalid' ? 'text-red-600' :
@@ -3963,7 +3978,7 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
                         </p>
                       </div>
                     </Field>
-                    <Field label="Marital Status">
+                    <Field label="Marital Status" required>
                       <select value={draft.maritalStatus} onChange={(e) => setDraftField('maritalStatus', e.target.value)} disabled={role === 'AUDITOR'} className="w-full h-11 rounded-md border border-slate-200 bg-white px-3 text-sm">
                         <option value="">Select status</option>
                         <option value="SINGLE">Single</option>
@@ -3975,9 +3990,17 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Field label="Primary Phone Number"><Input value={draft.primaryPhone} onChange={(e) => setDraftField('primaryPhone', e.target.value)} disabled={role === 'AUDITOR'} placeholder="+265..." /></Field>
-                    <Field label="Secondary Phone Number"><Input value={draft.secondaryPhone} onChange={(e) => setDraftField('secondaryPhone', e.target.value)} disabled={role === 'AUDITOR'} placeholder="Optional" /></Field>
-                    <Field label="Email Address"><Input type="email" value={draft.email} onChange={(e) => setDraftField('email', e.target.value)} disabled={role === 'AUDITOR'} placeholder="Optional" /></Field>
+                    <Field label="Primary Phone Number" required><Input value={draft.primaryPhone} onChange={(e) => setDraftField('primaryPhone', e.target.value)} disabled={role === 'AUDITOR'} placeholder="+265991234567" /></Field>
+                    <Field label="Secondary Phone Number" required><Input value={draft.secondaryPhone} onChange={(e) => setDraftField('secondaryPhone', e.target.value)} disabled={role === 'AUDITOR'} placeholder="May match primary number" /></Field>
+                    <Field label="Email Type" required>
+                      <select value={draft.emailSource} onChange={(e) => { setDraftField('emailSource', e.target.value); if (e.target.value === 'SYSTEM_GENERATED') setDraftField('email', ''); }} disabled={role === 'AUDITOR'} className="w-full h-11 rounded-md border border-slate-200 bg-white px-3 text-sm">
+                        <option value="MEMBER_PROVIDED">Member-provided</option><option value="SYSTEM_GENERATED">System-generated internal address</option>
+                      </select>
+                    </Field>
+                    <Field label="Email Address" required>
+                      <Input type="email" value={draft.email} onChange={(e) => setDraftField('email', e.target.value)} disabled={role === 'AUDITOR' || draft.emailSource === 'SYSTEM_GENERATED'} placeholder={draft.emailSource === 'SYSTEM_GENERATED' ? 'Generated securely when saved' : 'member@example.com'} />
+                    </Field>
+                    {draft.emailSource === 'SYSTEM_GENERATED' && <p className="md:col-span-2 text-xs text-slate-500">The address will use the reserved <code>.invalid</code> domain, is unique, and cannot accidentally receive external mail.</p>}
                     <Field label="Preferred Contact Method">
                       <select value={draft.preferredContactMethod} onChange={(e) => setDraftField('preferredContactMethod', e.target.value)} disabled={role === 'AUDITOR'} className="w-full h-11 rounded-md border border-slate-200 bg-white px-3 text-sm">
                         <option value="PHONE">Phone</option>
@@ -4005,31 +4028,50 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
 
               {draft.mode === 'new' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Field label="District"><Input value={draft.district} onChange={(e) => setDraftField('district', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
-                  <Field label="Traditional Authority (TA)"><Input value={draft.traditionalAuthority} onChange={(e) => setDraftField('traditionalAuthority', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
-                  <Field label="Village / Area"><Input value={draft.villageArea} onChange={(e) => setDraftField('villageArea', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                  <Field label="District" required><select value={draft.district} onChange={(e) => setDraftField('district', e.target.value)} disabled={role === 'AUDITOR'} className="w-full h-11 rounded-md border border-slate-200 bg-white px-3 text-sm"><option value="">Select district</option>{districtOptions.map(option => <option key={option.code} value={option.code}>{option.label}</option>)}</select></Field>
+                  <Field label="Traditional Authority (TA)" required><select value={draft.traditionalAuthority} onChange={(e) => setDraftField('traditionalAuthority', e.target.value)} disabled={role === 'AUDITOR' || !draft.district} className="w-full h-11 rounded-md border border-slate-200 bg-white px-3 text-sm"><option value="">{draft.district ? 'Select Traditional Authority' : 'Select a district first'}</option>{traditionalAuthorityOptions.map(option => <option key={option.code} value={option.code}>{option.label}</option>)}</select></Field>
+                  <Field label="Village / Area" required><Input value={draft.villageArea} onChange={(e) => setDraftField('villageArea', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
                   <Field label="GPS Coordinates"><Input value={draft.gpsCoordinates} onChange={(e) => setDraftField('gpsCoordinates', e.target.value)} disabled={role === 'AUDITOR'} placeholder="Optional" /></Field>
                   <div className="md:col-span-2">
-                    <Field label="Physical Address Description">
+                    <Field label="Physical Address Description" required>
                       <textarea value={draft.physicalAddress} onChange={(e) => setDraftField('physicalAddress', e.target.value)} disabled={role === 'AUDITOR'} className="w-full min-h-24 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm resize-none" />
                     </Field>
                   </div>
                 </div>
               )}
+              {lookupError && <p role="alert" className="text-xs font-semibold text-red-600">Location lookup error: {lookupError}</p>}
+              {draft.district && !lookupError && traditionalAuthorityOptions.length === 0 && <p role="status" className="text-xs text-amber-700">No Traditional Authorities are configured for this district. Ask an administrator to complete the lookup data.</p>}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Employment Status">
+                <Field label="Employment Status" required>
                   <select value={draft.employmentStatus} onChange={(e) => setDraftField('employmentStatus', e.target.value)} disabled={role === 'AUDITOR'} className="w-full h-11 rounded-md border border-slate-200 bg-white px-3 text-sm">
                     <option value="EMPLOYED">Employed</option>
                     <option value="SELF_EMPLOYED">Self-employed</option>
                     <option value="UNEMPLOYED">Unemployed</option>
+                    <option value="STUDENT">Student</option><option value="RETIRED">Retired</option><option value="OTHER">Other</option>
                   </select>
                 </Field>
-                <Field label="Monthly Income (MWK)"><Input type="number" value={draft.monthlyIncome} onChange={(e) => setDraftField('monthlyIncome', e.target.value)} disabled={role === 'AUDITOR'} min="0" /></Field>
-                <Field label="Employer Name"><Input value={draft.employerName} onChange={(e) => setDraftField('employerName', e.target.value)} disabled={role === 'AUDITOR'} placeholder="Required if employed" /></Field>
-                <Field label="Business Name"><Input value={draft.businessName} onChange={(e) => setDraftField('businessName', e.target.value)} disabled={role === 'AUDITOR'} placeholder="Required if self-employed" /></Field>
+                <Field label="Monthly Salary / Income (MWK)" required><Input type="number" step="0.01" value={draft.monthlyIncome} onChange={(e) => setDraftField('monthlyIncome', e.target.value)} disabled={role === 'AUDITOR'} min="0" /></Field>
+                {draft.employmentStatus === 'EMPLOYED' && <>
+                  <Field label="Employer Name" required><Input value={draft.employerName} onChange={(e) => setDraftField('employerName', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                  <Field label="Employer Address" required><Input value={draft.employerAddress} onChange={(e) => setDraftField('employerAddress', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                  <Field label="Employer Phone" required><Input value={draft.employerPhone} onChange={(e) => setDraftField('employerPhone', e.target.value)} disabled={role === 'AUDITOR'} placeholder="+265..." /></Field>
+                  <Field label="Employer Email" required><Input type="email" value={draft.employerEmail} onChange={(e) => setDraftField('employerEmail', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                  <Field label="Job Title / Position" required><Input value={draft.jobTitle} onChange={(e) => setDraftField('jobTitle', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                  <Field label="Department" required><Input value={draft.department} onChange={(e) => setDraftField('department', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                  <Field label="Length of Employment" required><Input value={draft.employmentLength} onChange={(e) => setDraftField('employmentLength', e.target.value)} disabled={role === 'AUDITOR'} placeholder="e.g. 3 years" /></Field>
+                  <Field label="Employment Type" required><Input value={draft.employmentType} onChange={(e) => setDraftField('employmentType', e.target.value)} disabled={role === 'AUDITOR'} placeholder="Permanent, contract, casual..." /></Field>
+                  <Field label="Other Income (MWK)"><Input type="number" step="0.01" min="0" value={draft.otherIncome} onChange={(e) => setDraftField('otherIncome', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                  <Field label="Supervisor / HR Contact" required><Input value={draft.supervisorContact} onChange={(e) => setDraftField('supervisorContact', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                  <Field label="Work Location" required><Input value={draft.workLocation} onChange={(e) => setDraftField('workLocation', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                </>}
+                {draft.employmentStatus === 'SELF_EMPLOYED' && <>
+                  <Field label="Business Name"><Input value={draft.businessName} onChange={(e) => setDraftField('businessName', e.target.value)} disabled={role === 'AUDITOR'} placeholder="Optional when not applicable" /></Field>
+                  <Field label="Other Income (MWK)"><Input type="number" step="0.01" min="0" value={draft.otherIncome} onChange={(e) => setDraftField('otherIncome', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                </>}
+                {draft.employmentStatus === 'OTHER' && <Field label="Specify Employment Status" required><Input value={draft.otherEmploymentStatus} onChange={(e) => setDraftField('otherEmploymentStatus', e.target.value)} disabled={role === 'AUDITOR'} /></Field>}
                 <div className="md:col-span-2">
-                  <Field label="Income Source Description">
+                  <Field label="Income Source Description" required>
                     <textarea value={draft.incomeSourceDescription} onChange={(e) => setDraftField('incomeSourceDescription', e.target.value)} disabled={role === 'AUDITOR'} className="w-full min-h-24 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm resize-none" placeholder="Salary, farming, business sales, piece work, etc." />
                   </Field>
                 </div>
@@ -4045,29 +4087,24 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Next of Kin / Guarantor Full Name"><Input value={draft.nextOfKinName} onChange={(e) => setDraftField('nextOfKinName', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
-                <Field label="Relationship"><Input value={draft.nextOfKinRelationship} onChange={(e) => setDraftField('nextOfKinRelationship', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
-                <Field label="Phone Number"><Input value={draft.nextOfKinPhone} onChange={(e) => setDraftField('nextOfKinPhone', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
-                <Field label="Address"><Input value={draft.nextOfKinAddress} onChange={(e) => setDraftField('nextOfKinAddress', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                <Field label="Next of Kin / Guarantor Full Name" required><Input value={draft.nextOfKinName} onChange={(e) => setDraftField('nextOfKinName', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                <Field label="Relationship" required><select value={draft.nextOfKinRelationship} onChange={(e) => setDraftField('nextOfKinRelationship', e.target.value)} disabled={role === 'AUDITOR'} className="w-full h-11 rounded-md border border-slate-200 bg-white px-3 text-sm"><option value="">Select relationship</option>{['SPOUSE','FATHER','MOTHER','BROTHER','SISTER','SON','DAUGHTER','UNCLE','AUNT','COUSIN','GUARDIAN','FRIEND','OTHER'].map(value => <option key={value} value={value}>{value.charAt(0)+value.slice(1).toLowerCase()}</option>)}</select></Field>
+                {draft.nextOfKinRelationship === 'OTHER' && <Field label="Specify Relationship" required><Input value={draft.nextOfKinRelationshipOther} onChange={(e) => setDraftField('nextOfKinRelationshipOther', e.target.value)} disabled={role === 'AUDITOR'} /></Field>}
+                <Field label="Phone Number" required><Input value={draft.nextOfKinPhone} onChange={(e) => setDraftField('nextOfKinPhone', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                <Field label="Address" required><Input value={draft.nextOfKinAddress} onChange={(e) => setDraftField('nextOfKinAddress', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="National ID Front Image">
+                <Field label="National ID Front Image" required>
                   <div className="space-y-2">
-                    <Input type="file" accept="image/*,.pdf" disabled={role === 'AUDITOR'} onChange={(e) => handleFileChange('idFront', e)} className="cursor-pointer" />
+                    <Input type="file" accept="image/*,.pdf" required aria-required="true" disabled={role === 'AUDITOR'} onChange={(e) => handleFileChange('idFront', e)} className="cursor-pointer" />
                     <p className="text-[11px] text-slate-500">{files.idFront ? files.idFront.name : 'No front image selected.'}</p>
                   </div>
                 </Field>
-                <Field label="National ID Back Image">
+                <Field label="National ID Back Image" required>
                   <div className="space-y-2">
-                    <Input type="file" accept="image/*,.pdf" disabled={role === 'AUDITOR'} onChange={(e) => handleFileChange('idBack', e)} className="cursor-pointer" />
+                    <Input type="file" accept="image/*,.pdf" required aria-required="true" disabled={role === 'AUDITOR'} onChange={(e) => handleFileChange('idBack', e)} className="cursor-pointer" />
                     <p className="text-[11px] text-slate-500">{files.idBack ? files.idBack.name : 'No back image selected.'}</p>
-                  </div>
-                </Field>
-                <Field label="Proof of Residence File">
-                  <div className="space-y-2">
-                    <Input type="file" accept="image/*,.pdf" disabled={role === 'AUDITOR'} onChange={(e) => handleFileChange('proofOfResidence', e)} className="cursor-pointer" />
-                    <p className="text-[11px] text-slate-500">{files.proofOfResidence ? files.proofOfResidence.name : 'Optional file not selected.'}</p>
                   </div>
                 </Field>
                 <Field label="Passport Photo File">
@@ -4079,7 +4116,7 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Field label="Existing Loans">
+                <Field label="Existing External Loan">
                   <select value={draft.hasExistingLoans} onChange={(e) => setDraftField('hasExistingLoans', e.target.value)} disabled={role === 'AUDITOR'} className="w-full h-11 rounded-md border border-slate-200 bg-white px-3 text-sm">
                     <option value="NO">No</option>
                     <option value="YES">Yes</option>
@@ -4094,10 +4131,13 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
                 </Field>
                 {hasExistingLoanDetails && (
                   <>
-                    <Field label="Current Lender Name"><Input value={draft.existingLenderName} onChange={(e) => setDraftField('existingLenderName', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
-                    <Field label="Outstanding Balance (MWK)"><Input type="number" value={draft.outstandingBalance} onChange={(e) => setDraftField('outstandingBalance', e.target.value)} disabled={role === 'AUDITOR'} min="0" /></Field>
+                    <Field label="External Lender" required><Input value={draft.existingLenderName} onChange={(e) => setDraftField('existingLenderName', e.target.value)} disabled={role === 'AUDITOR'} /></Field>
+                    <Field label="Original External-loan Amount (MWK)" required><Input type="number" step="0.01" value={draft.originalExternalLoanAmount} onChange={(e) => setDraftField('originalExternalLoanAmount', e.target.value)} disabled={role === 'AUDITOR'} min="0.01" /></Field>
+                    <Field label="Outstanding External-loan Balance (MWK)" required><Input type="number" step="0.01" value={draft.outstandingBalance} onChange={(e) => setDraftField('outstandingBalance', e.target.value)} disabled={role === 'AUDITOR'} min="0" /></Field>
+                    <Field label="Amount Already Repaid (MWK)" required><Input type="number" step="0.01" value={draft.amountRepaid} onChange={(e) => setDraftField('amountRepaid', e.target.value)} disabled={role === 'AUDITOR'} min="0" /></Field>
                   </>
                 )}
+                <Field label="Existing Financial Obligations (MWK)" required><Input type="number" step="0.01" value={draft.financialObligations} onChange={(e) => setDraftField('financialObligations', e.target.value)} disabled={role === 'AUDITOR'} min="0" /></Field>
                 <Field label="Payment Channel">
                   <select value={draft.paymentChannel} onChange={(e) => setDraftField('paymentChannel', e.target.value)} disabled={role === 'AUDITOR'} className="w-full h-11 rounded-md border border-slate-200 bg-white px-3 text-sm">
                     <option value="MOBILE_MONEY">Mobile Money</option>
@@ -4134,17 +4174,15 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
               <Card className="bg-slate-50 border-none rounded-xl">
                 <CardContent className="p-6 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Field label="Loan Product">
+                    <Field label="Loan Product" required>
                       <select value={draft.loanProduct} onChange={(e) => setDraftField('loanProduct', e.target.value)} disabled={role === 'AUDITOR'} className="w-full h-11 rounded-md border border-slate-200 bg-white px-3 text-sm">
-                        <option value="Commercial Growth Bridge">Commercial Growth Bridge</option>
-                        <option value="SME Expansion Fund">SME Expansion Fund</option>
-                        <option value="Personal Asset Loan">Personal Asset Loan</option>
+                        <option value="">Select an active loan product</option>
+                        {loanProducts.filter(product=>product.status==='ACTIVE'&&product.effectiveDate<=new Date().toISOString().slice(0,10)).map(product=><option key={product.id} value={product.id}>{product.productName} ({product.productCode})</option>)}
                       </select>
                     </Field>
                     <Field label="Currency">
                       <select value={draft.currency} onChange={(e) => setDraftField('currency', e.target.value)} disabled={role === 'AUDITOR'} className="w-full h-11 rounded-md border border-slate-200 bg-white px-3 text-sm">
                         <option value="MWK">MWK - Malawi Kwacha</option>
-                        <option value="USD">USD - United States Dollar</option>
                       </select>
                     </Field>
                   </div>
@@ -4159,6 +4197,10 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
                   <Field label="Purpose of Loan">
                     <textarea value={draft.purpose} onChange={(e) => setDraftField('purpose', e.target.value)} disabled={role === 'AUDITOR'} className="w-full min-h-24 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm resize-none" placeholder="Describe the reason for this loan request..." />
                   </Field>
+                  <Field label="Supporting Notes"><textarea value={draft.supportingNotes} onChange={(e) => setDraftField('supportingNotes', e.target.value)} disabled={role === 'AUDITOR'} className="w-full min-h-20 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm" placeholder="Optional context for assessment" /></Field>
+                  {selectedProduct&&<div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950"><p className="font-bold">Applicable product version {selectedProduct.version}</p><p>{selectedProduct.interestMethod==='FLAT_RATE'?'Flat-rate':'Reducing-balance'} interest · {selectedProduct.annualInterestRateBps/100}% annually · {selectedProduct.repaymentFrequency.toLowerCase()}</p><p>Amount range: MWK {(selectedProduct.minAmountMinor/100).toLocaleString()} – MWK {(selectedProduct.maxAmountMinor/100).toLocaleString()} · Periods: {selectedProduct.minPeriods}–{selectedProduct.maxPeriods}</p></div>}
+                  {applicationEstimate&&<div className={`rounded-lg border p-4 text-sm ${applicationEstimate.eligibility.eligible?'border-emerald-200 bg-emerald-50 text-emerald-950':'border-red-200 bg-red-50 text-red-950'}`}><p className="font-bold">Backend eligibility preview: {applicationEstimate.eligibility.eligible?'Eligible to submit':'Not eligible'}</p>{applicationEstimate.eligibility.repaymentPercentageBps!==null&&<p>External loan repaid: {(applicationEstimate.eligibility.repaymentPercentageBps/100).toFixed(2)}% · Required: more than {(applicationEstimate.eligibility.thresholdBps/100).toFixed(2)}%</p>}<p>Estimated interest: MWK {(applicationEstimate.estimate.interestMinor/100).toLocaleString()}</p><p>Insurance fee: MWK {(applicationEstimate.estimate.insurance.totalMinor/100).toLocaleString()}{applicationEstimate.estimate.insurance.provisional?' (provisional until approval)':''}</p><p>Administration fee: MWK {(applicationEstimate.estimate.administration.totalMinor/100).toLocaleString()}{applicationEstimate.estimate.administration.provisional?' (provisional until approval)':''}</p>{applicationEstimate.eligibility.reasons.map((reason:string)=><p key={reason} className="font-semibold mt-1">{reason}</p>)}</div>}
+                  {estimateError&&draft.mode==='existing'&&<p role="alert" className="text-sm font-semibold text-red-600">{estimateError}</p>}
                 </CardContent>
               </Card>
             </section>
@@ -4206,8 +4248,8 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
               </Button>
             ) : (
               role !== 'AUDITOR' && (
-                <Button onClick={handleSubmit} className="flex-[2] h-12 bg-blue-600 hover:bg-blue-700 font-bold gap-2">
-                  SUBMIT APPLICATION <ChevronRight size={18} />
+                <Button onClick={handleSubmit} disabled={isSubmitting} className="flex-[2] h-12 bg-blue-600 hover:bg-blue-700 font-bold gap-2">
+                  {isSubmitting?'SUBMITTING…':'SUBMIT APPLICATION'} <ChevronRight size={18} />
                 </Button>
               )
             )}
@@ -4278,11 +4320,15 @@ function ApplicationsView({ clients, applications, role }: { clients: any[], app
   );
 }
 
-function Field({ label, children }: { label: string, children: React.ReactNode }) {
+function Field({ label, children, required = false }: { label: string, children: React.ReactNode, required?: boolean }) {
+  const controlId = React.useId();
+  const control = React.isValidElement(children)
+    ? React.cloneElement(children as React.ReactElement<any>, { id: (children.props as any).id || controlId, ...(required ? { required: true, 'aria-required': true } : {}) })
+    : children;
   return (
     <div className="space-y-2">
-      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</label>
-      {children}
+      <label htmlFor={controlId} className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}{required && <span className="ml-1 text-red-600" aria-hidden="true">*</span>}<span className="sr-only">{required ? ' required' : ''}</span></label>
+      {control}
     </div>
   );
 }
@@ -4312,193 +4358,6 @@ function StepItem({ number, label, active, completed = false }: any) {
       </div>
       <span className={`text-sm font-bold ${active ? 'text-slate-900' : 'text-slate-400'}`}>{label}</span>
     </div>
-  );
-}
-
-function ApprovalsView({ applications, role }: { applications: any[], role: UserRole }) {
-  const pendingApps = applications.filter(a => a.status === 'SUBMITTED' || a.status === 'IN_REVIEW');
-  const reviewerEmail = getActiveSessionEmail();
-
-  const handleApprove = async (app: any) => {
-    if (role === 'AUDITOR') {
-      toast.error("Auditors cannot approve applications");
-      return;
-    }
-    try {
-      const approvedAt = serverTimestamp();
-      const clientName = app.clientSnapshot?.name || `Client ${app.clientId?.slice(0, 8)?.toUpperCase() || ''}`.trim();
-      const requestedAmount = app.requestedAmount || 0;
-      const monthlyIncome = app.monthlyIncome || Math.round((app.annualIncome || 0) / 12);
-      const originatingAgentEmail = app.originatingAgentEmail || app.assignedAgentEmail || app.metadata?.createdBy?.email || '';
-
-      await updateDoc(doc(db, 'applications', app.id), {
-        status: 'APPROVED',
-        approvedAt,
-        approvedBy: reviewerEmail || 'system',
-        updatedAt: serverTimestamp()
-      });
-
-      const disbursedAt = serverTimestamp();
-      const loanRef = await addDoc(collection(db, 'loans'), {
-        clientId: app.clientId,
-        applicationId: app.id,
-        clientName,
-        amount: requestedAmount,
-        outstandingBalance: requestedAmount,
-        interestRate: 5.25,
-        status: "ACTIVE",
-        type: app.loanProduct || "Commercial Growth",
-        termMonths: app.termMonths || 0,
-        monthlyIncome,
-        nextDueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-        originatingAgentEmail,
-        assignedAgentEmail: originatingAgentEmail,
-        approvedBy: reviewerEmail || 'system',
-        metadata: {
-          createdBy: app.metadata?.createdBy || null,
-          approvedBy: reviewerEmail || 'system',
-          approvedAt,
-          applicationStatus: 'APPROVED',
-        },
-        disbursedAt,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-
-      await addDoc(collection(db, 'transactions'), {
-        loanId: loanRef.id,
-        applicationId: app.id,
-        clientId: app.clientId,
-        clientName,
-        type: 'DISBURSEMENT',
-        amount: requestedAmount,
-        method: app.financialProfile?.paymentChannel || 'SYSTEM',
-        reference: `DISB-${app.id.slice(0, 8).toUpperCase()}`,
-        agentEmail: reviewerEmail || 'system',
-        originatingAgentEmail,
-        approvedBy: reviewerEmail || 'system',
-        timestamp: serverTimestamp()
-      });
-      
-      toast.success("Application approved and loan disbursed");
-    } catch (e) {
-      handleFirestoreError(e, OperationType.WRITE, 'loans/applications');
-    }
-  };
-
-  const handleReject = async (app: any) => {
-    if (role === 'AUDITOR') {
-      toast.error("Auditors cannot reject applications");
-      return;
-    }
-    try {
-      await updateDoc(doc(db, 'applications', app.id), {
-        status: 'REJECTED',
-        rejectedBy: reviewerEmail || 'system',
-        updatedAt: serverTimestamp()
-      });
-      toast.info("Application rejected");
-    } catch (e) {
-      handleFirestoreError(e, OperationType.UPDATE, 'applications');
-    }
-  };
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-8"
-    >
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Credit Approvals</h2>
-          <p className="text-slate-500 mt-1">Review and authorize pending loan applications.</p>
-        </div>
-        <Badge className="bg-orange-100 text-orange-700 border-none px-3 py-1 uppercase tracking-widest text-[10px] font-black">
-          {pendingApps.length} PENDING REVIEW
-        </Badge>
-      </div>
-
-      <div className="grid grid-cols-1 gap-4">
-        {pendingApps.length === 0 ? (
-          <div className="p-12 text-center border-2 border-dashed border-border rounded-xl bg-[#F9FAFB]">
-            <CheckCircle2 className="mx-auto text-muted-foreground/30 mb-3" size={40} />
-            <h3 className="text-sm font-bold text-foreground">Queue Clear</h3>
-            <p className="text-[12px] text-muted-foreground mt-1">All applications have been processed.</p>
-          </div>
-        ) : (
-          pendingApps.map(app => (
-            <Card key={app.id} className="border border-border shadow-none rounded-lg overflow-hidden flex flex-col md:flex-row bg-white">
-              <div className="p-4 flex-1 space-y-4">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-10 w-10 border border-border">
-                      <AvatarFallback className="bg-[#F3F4F6] text-primary font-bold text-xs">CL</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <h4 className="font-bold text-[14px] text-foreground">Application #{app.id.slice(0, 8).toUpperCase()}</h4>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Client ID: {app.clientId.slice(0, 8).toUpperCase()}</p>
-                    </div>
-                  </div>
-                  <span className="bg-[#DBEAFE] text-[#1E40AF] px-2 py-0.5 rounded-full text-[10px] font-bold">{app.status}</span>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-2">
-                  <div>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Requested</p>
-                    <p className="text-lg font-bold text-foreground">MWK {app.requestedAmount.toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Term</p>
-                    <p className="text-lg font-bold text-foreground">{app.termMonths} <span className="text-[11px] text-muted-foreground font-medium">Mo</span></p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Income</p>
-                    <p className="text-lg font-bold text-foreground">MWK {(app.annualIncome || 0).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Employment</p>
-                    <p className="text-[12px] font-semibold text-foreground">{app.employmentStatus?.replace('_', ' ') || 'N/A'}</p>
-                  </div>
-                </div>
-
-                {app.purpose && (
-                  <div className="pt-2">
-                    <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Purpose</p>
-                    <p className="text-[12px] text-slate-600 leading-relaxed italic">"{app.purpose}"</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="bg-[#F9FAFB] border-l border-border p-4 flex flex-row md:flex-col justify-center gap-2 w-full md:w-48">
-                {role !== 'AUDITOR' ? (
-                  <>
-                    <Button 
-                      onClick={() => handleApprove(app)}
-                      size="sm"
-                      className="w-full h-9 text-[11px] font-bold bg-primary text-white"
-                    >
-                      APPROVE
-                    </Button>
-                    <Button 
-                      onClick={() => handleReject(app)}
-                      variant="outline" 
-                      size="sm"
-                      className="w-full h-9 text-[11px] font-bold border-border text-muted-foreground hover:bg-white"
-                    >
-                      REJECT
-                    </Button>
-                  </>
-                ) : (
-                  <Badge variant="outline" className="w-full h-9 flex items-center justify-center text-[10px] font-bold border-border text-muted-foreground">READ ONLY</Badge>
-                )}
-              </div>
-            </Card>
-          ))
-        )}
-      </div>
-    </motion.div>
   );
 }
 
@@ -6132,142 +5991,6 @@ function AgentDueLoansView({ loans, clients, onNavigate }: { loans: any[], clien
           </div>
         </Card>
       </div>
-    </motion.div>
-  );
-}
-
-function LoanProductsView() {
-  const [isAdding, setIsAdding] = useState(false);
-  const [products, setProducts] = useState([
-    { id: '1', name: 'Commercial Growth Bridge', interestRate: 12.5, maxTerm: 36, minAmount: 10000, maxAmount: 500000, status: 'ACTIVE' },
-    { id: '2', name: 'SME Expansion Fund', interestRate: 15.0, maxTerm: 24, minAmount: 5000, maxAmount: 100000, status: 'ACTIVE' },
-    { id: '3', name: 'Personal Asset Loan', interestRate: 18.0, maxTerm: 12, minAmount: 1000, maxAmount: 25000, status: 'INACTIVE' }
-  ]);
-
-  return (
-    <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="space-y-5"
-    >
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-bold tracking-tight text-foreground">Loan Products</h2>
-          <p className="text-[12px] text-muted-foreground">Define the rules of lending (interest rates, durations, penalties).</p>
-        </div>
-        <Button 
-          onClick={() => setIsAdding(true)}
-          className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold gap-2 h-9"
-        >
-          <Plus size={16} /> Create Product
-        </Button>
-      </div>
-
-      <Card className="border border-border shadow-none rounded-lg bg-white overflow-hidden">
-        <Table className="text-[13px]">
-          <TableHeader className="bg-[#F9FAFB]">
-            <TableRow className="hover:bg-transparent border-border">
-              <TableHead className="text-muted-foreground font-semibold h-11 px-5">Product Name</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-11 px-5">Interest Rate (APR)</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-11 px-5">Max Term</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-11 px-5">Amount Range</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-11 px-5">Status</TableHead>
-              <TableHead className="text-muted-foreground font-semibold h-11 px-5 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {products.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
-                  No loan products defined.
-                </TableCell>
-              </TableRow>
-            ) : (
-              products.map(product => (
-                <TableRow key={product.id} className="border-border">
-                  <TableCell className="px-5 py-3 font-bold text-foreground">{product.name}</TableCell>
-                  <TableCell className="px-5 py-3 font-medium">{product.interestRate}%</TableCell>
-                  <TableCell className="px-5 py-3 text-muted-foreground">{product.maxTerm} months</TableCell>
-                  <TableCell className="px-5 py-3 text-muted-foreground">
-                    MWK {product.minAmount.toLocaleString()} - MWK {product.maxAmount.toLocaleString()}
-                  </TableCell>
-                  <TableCell className="px-5 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      product.status === 'ACTIVE' ? 'bg-[#D1FAE5] text-[#065F46]' : 'bg-slate-100 text-slate-500'
-                    }`}>
-                      {product.status}
-                    </span>
-                  </TableCell>
-                  <TableCell className="px-5 py-3 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50">
-                        <Edit size={14} />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                        <MoreHorizontal size={16} />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </Card>
-
-      <AnimatePresence>
-        {isAdding && (
-          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="max-w-md w-full"
-            >
-              <Card className="border-none shadow-2xl rounded-xl overflow-hidden">
-                <div className="bg-brand-600 p-6 text-white">
-                  <h3 className="text-lg font-bold">Create Loan Product</h3>
-                  <p className="text-brand-100 text-xs mt-1">Define parameters for a new lending product.</p>
-                </div>
-                <CardContent className="p-6 space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-700">Product Name</label>
-                    <Input placeholder="e.g. Agricultural Equipment Loan" className="border-border" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-700">Interest Rate (%)</label>
-                      <Input type="number" placeholder="15.0" className="border-border" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-700">Max Term (Months)</label>
-                      <Input type="number" placeholder="24" className="border-border" />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-700">Min Amount (MWK )</label>
-                      <Input type="number" placeholder="1000" className="border-border" />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-700">Max Amount (MWK )</label>
-                      <Input type="number" placeholder="50000" className="border-border" />
-                    </div>
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <Button variant="outline" className="flex-1 h-10 font-bold" onClick={() => setIsAdding(false)}>CANCEL</Button>
-                    <Button className="flex-1 h-10 bg-brand-600 hover:bg-brand-700 font-bold" onClick={() => {
-                      toast.success("Loan product created successfully");
-                      setIsAdding(false);
-                    }}>CREATE PRODUCT</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </motion.div>
   );
 }

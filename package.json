@@ -12,7 +12,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "node --import tsx --test --test-concurrency=1 server/reports-db.test.ts server/reports.test.ts server/collections-db.test.ts server/collections.test.ts server/penalty-payment-db.test.ts server/penalty-payment.test.ts server/penalty-assessment-db.test.ts server/penalty-assessment.test.ts server/penalty-policy-db.test.ts server/penalty-policy.test.ts server/loan-repayment-db.test.ts server/loan-repayment.test.ts server/loan-disbursement-db.test.ts server/loan-disbursement.test.ts server/application-review-db.test.ts server/application-review.test.ts server/loan-application-db.test.ts server/loan-application.test.ts server/loan-product-db.test.ts server/loan-product.test.ts server/member-db.test.ts server/member-validation.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.0",
@@ -50,7 +51,7 @@
     "@types/nodemailer": "^8.0.1",
     "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.1.14",
-    "tsx": "^4.21.0",
+    "tsx": "^4.23.12",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

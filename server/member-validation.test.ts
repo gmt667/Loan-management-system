@@ -1,0 +1,10 @@
+import assert from'node:assert/strict';import test from'node:test';import{generateInternalEmail,normalizePhone,validateMember}from'./member-validation.js';
+const base:any={firstName:'Mary',lastName:'Banda',idNumber:'MW123456',primaryPhone:'0991234567',secondaryPhone:'0991234567',email:'mary@example.com',emailSource:'MEMBER_PROVIDED',district:'LILONGWE',traditionalAuthority:'LILONGWE_CHITUKULA',villageArea:'Area 25',physicalAddress:'Plot 1',employmentStatus:'STUDENT',monthlyIncome:'0',nextOfKin:{fullName:'John Banda',relationship:'FATHER',phoneNumber:'0881234567',address:'Lilongwe'}};
+test('normalizes Malawi phones and permits equal numbers',()=>{const m=validateMember(base);assert.equal(m.primaryPhone,'+265991234567');assert.equal(m.secondaryPhone,m.primaryPhone)});
+test('rejects invalid and missing secondary phones',()=>{assert.throws(()=>validateMember({...base,secondaryPhone:''}),/secondaryPhone/);assert.throws(()=>normalizePhone('123'),/valid Malawi/)});
+test('uses reserved non-deliverable generated email domain',()=>assert.match(generateInternalEmail('MW-123'),/@members\.giantfluid\.invalid$/));
+test('accepts a server-generated email and rejects malformed provided email',()=>{const generated=generateInternalEmail(base.idNumber);assert.equal(validateMember({...base,email:'',emailSource:'SYSTEM_GENERATED'},generated).email,generated);assert.throws(()=>validateMember({...base,email:'invalid'}),/valid member email/)});
+test('requires Other relationship detail',()=>assert.throws(()=>validateMember({...base,nextOfKin:{...base.nextOfKin,relationship:'OTHER'}}),/Specify/));
+test('requires employed details only for employed members',()=>{assert.doesNotThrow(()=>validateMember({...base,employmentStatus:'SELF_EMPLOYED'}));assert.throws(()=>validateMember({...base,employmentStatus:'EMPLOYED'}),/Missing employed/)});
+test('requires a description for Other employment',()=>assert.throws(()=>validateMember({...base,employmentStatus:'OTHER'}),/Specify the other employment/));
+test('rejects backend bypass attempts with missing registration fields',()=>assert.throws(()=>validateMember({email:'x@example.com'}),/Missing required member fields/));

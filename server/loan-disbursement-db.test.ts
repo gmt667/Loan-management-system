@@ -1,0 +1,7 @@
+import 'dotenv/config';
+import assert from 'node:assert/strict';
+import test,{after}from 'node:test';
+import { pool } from './db.js';
+after(async()=>{await pool.end();});
+test('disbursement schema prevents duplicate application, approval, idempotency, external reference and loans',async()=>{const[indexes]=await pool.query<any[]>("SELECT table_name,index_name FROM information_schema.statistics WHERE table_schema=DATABASE() AND ((table_name='loan_disbursements' AND index_name IN ('uq_disbursement_application','uq_disbursement_approval','uq_disbursement_idempotency','uq_disbursement_external_reference')) OR (table_name='normalized_loans' AND index_name IN ('uq_normalized_loan_application','uq_normalized_loan_disbursement'))) GROUP BY table_name,index_name");assert.equal(indexes.length,6);});
+test('schedule schema uses exact integer minor units and unpaid-only initial state',async()=>{const[columns]=await pool.query<any[]>("SELECT column_name,data_type,column_type FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='loan_repayment_schedule' AND column_name IN ('principal_due_minor','interest_due_minor','fee_due_minor','vat_due_minor','total_due_minor','status')");assert.equal(columns.length,6);assert.ok(columns.filter(row=>row.column_name!=='status').every(row=>row.data_type==='bigint'));assert.match(columns.find(row=>row.column_name==='status').column_type,/unpaid/i);});

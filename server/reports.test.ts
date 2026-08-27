@@ -1,0 +1,7 @@
+import test from'node:test';import assert from'node:assert/strict';import{canViewReports,csvCell,delinquencyBucket,parBps,reportRange,sumMinor,toCsv}from'./reports.js';
+test('sums monetary values exactly and rejects unsafe output',()=>assert.equal(sumMinor([{x:'9007199254740000'},{x:'991'}],'x'),9007199254740991));
+test('calculates PAR thresholds with exact basis-point rounding and zero denominator',()=>{assert.equal(parBps(1,3),3333);assert.equal(parBps(0,0),0)});
+test('uses established ageing boundaries',()=>assert.deepEqual([0,1,7,8,30,31,60,61,90,91].map(delinquencyBucket),['DUE_TODAY','1_7','1_7','8_30','8_30','31_60','31_60','61_90','61_90','90_PLUS']));
+test('validates explicit period and bounded pagination',()=>{assert.deepEqual(reportRange({businessDate:'2026-08-27',from:'2026-01-01',to:'2026-08-27',page:2,pageSize:500}),{businessDate:'2026-08-27',from:'2026-01-01',to:'2026-08-27',page:2,pageSize:100,offset:100});assert.throws(()=>reportRange({businessDate:'bad'}))});
+test('protects CSV formula cells and emits UTF-8 CSV',()=>{assert.equal(csvCell('=cmd'),"\"'=cmd\"");const csv=toCsv([{name:'+unsafe',amount:0}]);assert(csv.startsWith('\uFEFF'));assert(csv.includes("'+unsafe"))});
+test('preserves report roles without broad agent access',()=>{assert(canViewReports('ADMIN'));assert(canViewReports('OFFICER'));assert(canViewReports('AUDITOR'));assert(!canViewReports('AGENT'))});
